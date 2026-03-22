@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+	line-height: 1.5;
+	font-weight: 400;
+	font-synthesis: none;
+	text-rendering: optimizeLegibility;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	font-family: 'Inter', sans-serif;
+	font-optical-sizing: auto;
+	font-style: normal;
+	font-variation-settings: 'slnt' 0;
+}
+
+@layer base {
+	
+}
+
+/* Section floutée pour la lisibilité du texte (inspiré de l'ancien projet) */
+.text-box-blur {
+  background: rgba(255, 255, 255, 0.1); /* Légèrement plus transparent */
+  backdrop-filter: blur(8px); /* Flou plus prononcé */
+  padding: 2rem;
+  border-radius: 1rem;
+  box-shadow: 0 4px 30px rgba(26, 8, 226, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+
+/*
+  Cible le bouton pour cacher le texte original "Connect".
+*/
+.tw-connect-wallet.css-1d64wxn {
+  /* On rend le texte original invisible.
+     On utilise !important pour forcer la surcharge du style en ligne (style="..."). */
+  font-size: 0 !important;
+  color: transparent !important;
+}
+
+/*
+  Crée le nouveau texte "Suivant" avec un pseudo-élément.
+*/
+.tw-connect-wallet.css-1d64wxn::before {
+  content: "Next";
+  /* On rétablit la taille de police et la couleur pour ce nouveau texte. */
+  font-size: 16px;
+  color: black; /* <-- Changez la couleur si besoin (ex: black) */
+}
