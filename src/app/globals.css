@@ -3,49 +3,403 @@
 @tailwind utilities;
 
 :root {
-	line-height: 1.5;
-	font-weight: 400;
-	font-synthesis: none;
-	text-rendering: optimizeLegibility;
-	-webkit-font-smoothing: antialiased;
-	-moz-osx-font-smoothing: grayscale;
-	font-family: 'Inter', sans-serif;
-	font-optical-sizing: auto;
-	font-style: normal;
-	font-variation-settings: 'slnt' 0;
+  line-height: 1.5;
+  font-weight: 400;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-family: 'Inter', sans-serif;
+  font-optical-sizing: auto;
+  font-style: normal;
+  font-variation-settings: 'slnt' 0;
 }
 
-@layer base {
-	
+* {
+  box-sizing: border-box;
 }
 
-/* Section floutée pour la lisibilité du texte (inspiré de l'ancien projet) */
-.text-box-blur {
-  background: rgba(255, 255, 255, 0.1); /* Légèrement plus transparent */
-  backdrop-filter: blur(8px); /* Flou plus prononcé */
-  padding: 2rem;
+body {
+  margin: 0;
+  padding: 0;
+  background: #0d0d0d;
+}
+
+/* ============================================================
+   MAIN LAYOUT
+   ============================================================ */
+
+.transfer-main {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+}
+
+/* ============================================================
+   FORM CONTAINER
+   ============================================================ */
+
+.form-container {
+  width: 100%;
+  max-width: 480px;
+  padding: 1.75rem;
   border-radius: 1rem;
-  box-shadow: 0 4px 30px rgba(26, 8, 226, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
 }
 
+/* ============================================================
+   LABELS
+   ============================================================ */
 
-/*
-  Cible le bouton pour cacher le texte original "Connect".
-*/
-.tw-connect-wallet.css-1d64wxn {
-  /* On rend le texte original invisible.
-     On utilise !important pour forcer la surcharge du style en ligne (style="..."). */
-  font-size: 0 !important;
-  color: transparent !important;
+.form-label {
+  display: block;
+  color: #4ade80;
+  font-size: 0.85rem;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
 }
 
-/*
-  Crée le nouveau texte "Suivant" avec un pseudo-élément.
-*/
-.tw-connect-wallet.css-1d64wxn::before {
-  content: "Next";
-  /* On rétablit la taille de police et la couleur pour ce nouveau texte. */
-  font-size: 16px;
-  color: black; /* <-- Changez la couleur si besoin (ex: black) */
+.form-label--spaced {
+  margin-top: 1.5rem;
+}
+
+/* ============================================================
+   INPUT ROW (Address & Amount)
+   ============================================================ */
+
+.input-row {
+  display: flex;
+  align-items: center;
+  background: #111111;
+  border: 1px solid #333;
+  border-radius: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  gap: 0.5rem;
+}
+
+.input-row__field {
+  flex: 1;
+  min-width: 0; /* prevents overflow on small screens */
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #e5e7eb;
+  font-size: 0.95rem;
+  font-family: inherit;
+}
+
+.input-row__field--amount {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.input-row__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   BUTTONS INSIDE INPUTS
+   ============================================================ */
+
+.btn-paste {
+  background: transparent;
+  border: none;
+  color: #4ade80;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 0;
+  white-space: nowrap;
+}
+
+.btn-icon {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 0;
+}
+
+.btn-step {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0 2px;
+  display: flex;
+  align-items: center;
+}
+
+.btn-max {
+  background: transparent;
+  border: none;
+  color: #4ade80;
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  margin-left: 8px;
+  white-space: nowrap;
+}
+
+/* ============================================================
+   AMOUNT ACTIONS
+   ============================================================ */
+
+.amount-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.stepper {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.amount-currency {
+  color: #9ca3af;
+  font-size: 0.9rem;
+  margin-left: 8px;
+  white-space: nowrap;
+}
+
+/* ============================================================
+   NETWORK SELECTOR
+   ============================================================ */
+
+.network-selector {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #111111;
+  border: 1px solid #333;
+  border-radius: 2rem;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+}
+
+.eth-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #232323;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.network-name {
+  color: #e5e7eb;
+  font-size: 0.95rem;
+}
+
+/* ============================================================
+   APPROX PRICE
+   ============================================================ */
+
+.approx-price {
+  color: #9ca3af;
+  font-size: 0.85rem;
+  margin-top: 0.75rem;
+}
+
+/* ============================================================
+   NEXT BUTTON
+   ============================================================ */
+
+.next-btn-wrapper {
+  margin-top: 2rem;
+  margin-bottom: 2rem;
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  justify-content: center;
+}
+
+.next-btn {
+  display: inline-block;
+  width: 100%;
+  max-width: 480px;
+  padding: 0.95rem 3rem;
+  background-color: #4ade80;
+  color: #000000;
+  font-weight: 700;
+  font-size: 1rem;
+  border-radius: 0.75rem;
+  text-decoration: none;
+  text-align: center;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.15s ease;
+  border: none;
+}
+
+.next-btn:hover {
+  background-color: #22c55e;
+  transform: translateY(-1px);
+}
+
+.next-btn:active {
+  transform: translateY(0);
+  background-color: #16a34a;
+}
+
+/* ============================================================
+   RESPONSIVE – Tablet (≤ 768px)
+   ============================================================ */
+
+@media (max-width: 768px) {
+  .transfer-main {
+    padding: 1.5rem 0.75rem;
+  }
+
+  .form-container {
+    padding: 1.5rem;
+    border-radius: 0.85rem;
+  }
+
+  .next-btn {
+    padding: 0.85rem 2rem;
+  }
+}
+
+/* ============================================================
+   RESPONSIVE – Mobile (≤ 480px)
+   ============================================================ */
+
+@media (max-width: 480px) {
+  .transfer-main {
+    padding: 1rem 0.5rem;
+    justify-content: flex-start;
+    padding-top: 2rem;
+  }
+
+  .form-container {
+    padding: 1.15rem;
+    border-radius: 0.75rem;
+    max-width: 100%;
+  }
+
+  .form-label {
+    font-size: 0.8rem;
+  }
+
+  .form-label--spaced {
+    margin-top: 1.15rem;
+  }
+
+  .input-row {
+    padding: 0.55rem 0.6rem;
+    gap: 0.35rem;
+    border-radius: 0.6rem;
+  }
+
+  .input-row__field {
+    font-size: 0.85rem;
+  }
+
+  .input-row__field--amount {
+    font-size: 0.95rem;
+  }
+
+  .input-row__actions {
+    gap: 0.4rem;
+  }
+
+  .btn-paste {
+    font-size: 0.8rem;
+  }
+
+  .btn-icon svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .network-selector {
+    padding: 0.4rem 0.75rem;
+    gap: 0.35rem;
+  }
+
+  .eth-icon {
+    width: 28px;
+    height: 28px;
+  }
+
+  .eth-icon svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .network-name {
+    font-size: 0.85rem;
+  }
+
+  .amount-currency {
+    font-size: 0.8rem;
+    margin-left: 6px;
+  }
+
+  .btn-max {
+    font-size: 0.8rem;
+    margin-left: 6px;
+  }
+
+  .approx-price {
+    font-size: 0.8rem;
+  }
+
+  .next-btn-wrapper {
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    max-width: 100%;
+  }
+
+  .next-btn {
+    padding: 0.85rem 1.5rem;
+    font-size: 0.95rem;
+    border-radius: 0.6rem;
+  }
+}
+
+/* ============================================================
+   RESPONSIVE – Very small screens (≤ 360px)
+   ============================================================ */
+
+@media (max-width: 360px) {
+  .transfer-main {
+    padding: 0.75rem 0.35rem;
+    padding-top: 1.5rem;
+  }
+
+  .form-container {
+    padding: 1rem;
+  }
+
+  .input-row {
+    padding: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .input-row__field {
+    font-size: 0.8rem;
+    width: 100%;
+  }
+
+  .btn-paste {
+    font-size: 0.75rem;
+  }
+
+  .next-btn {
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+  }
 }
