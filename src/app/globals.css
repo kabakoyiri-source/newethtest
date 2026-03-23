@@ -22,12 +22,186 @@
 body {
   margin: 0;
   padding: 0;
-  background: #0d0d0d;
 }
 
-/* ============================================================
-   MAIN LAYOUT
-   ============================================================ */
+/* ================================================================
+   ================================================================
+   HOME PAGE (white / QR code)
+   ================================================================
+   ================================================================ */
+
+.home-main {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+  background: #ffffff;
+  position: relative;
+  overflow: hidden;
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+}
+
+/* Decorative blobs */
+.home-bg-shape {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(100px);
+  opacity: 0.4;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.home-bg-shape--1 {
+  width: 500px;
+  height: 500px;
+  background: #dbeafe;
+  top: -120px;
+  right: -120px;
+}
+
+.home-bg-shape--2 {
+  width: 400px;
+  height: 400px;
+  background: #d1fae5;
+  bottom: -100px;
+  left: -100px;
+}
+
+.home-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  max-width: 480px;
+  width: 100%;
+}
+
+/* Logo */
+.home-logo {
+  margin-bottom: 1.25rem;
+}
+
+/* Title */
+.home-title {
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: #111827;
+  margin: 0 0 0.5rem;
+  letter-spacing: -0.02em;
+}
+
+/* Subtitle */
+.home-subtitle {
+  font-size: 0.95rem;
+  color: #6b7280;
+  margin: 0 0 2rem;
+  line-height: 1.6;
+  max-width: 360px;
+}
+
+/* QR Card */
+.qr-card {
+  position: relative;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 1.25rem;
+  padding: 1.5rem;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06), 0 1px 4px rgba(0, 0, 0, 0.04);
+  margin-bottom: 2rem;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.qr-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1), 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.qr-glow {
+  position: absolute;
+  inset: -2px;
+  border-radius: 1.35rem;
+  background: linear-gradient(135deg, #3b82f6, #10b981, #3b82f6);
+  opacity: 0.15;
+  z-index: -1;
+  animation: glow-rotate 6s linear infinite;
+}
+
+@keyframes glow-rotate {
+  0% { filter: hue-rotate(0deg); }
+  100% { filter: hue-rotate(360deg); }
+}
+
+.qr-image {
+  display: block;
+  border-radius: 0.5rem;
+}
+
+/* Steps */
+.home-steps {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.home-step {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.home-step__number {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #0500FF;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.home-step__text {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #374151;
+  white-space: nowrap;
+}
+
+.home-step__arrow {
+  font-size: 1rem;
+  color: #d1d5db;
+  font-weight: 300;
+}
+
+/* Footer text */
+.home-footer-text {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.home-footer-text::before {
+  content: "🔒";
+  font-size: 0.7rem;
+}
+
+/* ================================================================
+   ================================================================
+   WALLET PAGE (dark / transfer form)
+   ================================================================
+   ================================================================ */
 
 .transfer-main {
   min-height: 100vh;
@@ -37,6 +211,7 @@ body {
   justify-content: center;
   padding: 2rem 1rem;
   font-family: 'Inter', 'Segoe UI', sans-serif;
+  background: #0d0d0d;
 }
 
 /* ============================================================
@@ -338,9 +513,81 @@ body {
   }
 }
 
-/* ============================================================
-   RESPONSIVE – Tablet (<=768px)
-   ============================================================ */
+/* ================================================================
+   ================================================================
+   RESPONSIVE
+   ================================================================
+   ================================================================ */
+
+/* --- HOME PAGE responsive --- */
+
+@media (max-width: 480px) {
+  .home-main {
+    padding: 1.5rem 0.75rem;
+  }
+
+  .home-title {
+    font-size: 1.35rem;
+  }
+
+  .home-subtitle {
+    font-size: 0.85rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .qr-card {
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .qr-image {
+    width: 220px;
+    height: 220px;
+  }
+
+  .home-steps {
+    gap: 0.5rem;
+  }
+
+  .home-step__text {
+    font-size: 0.75rem;
+  }
+
+  .home-step__number {
+    width: 22px;
+    height: 22px;
+    font-size: 0.65rem;
+  }
+
+  .home-step__arrow {
+    font-size: 0.85rem;
+  }
+}
+
+@media (max-width: 360px) {
+  .home-title {
+    font-size: 1.2rem;
+  }
+
+  .qr-image {
+    width: 180px;
+    height: 180px;
+  }
+
+  .qr-card {
+    padding: 0.85rem;
+  }
+
+  .home-steps {
+    gap: 0.35rem;
+  }
+
+  .home-step__text {
+    font-size: 0.7rem;
+  }
+}
+
+/* --- WALLET PAGE responsive --- */
 
 @media (max-width: 768px) {
   .transfer-main {
@@ -356,10 +603,6 @@ body {
     padding: 0.85rem 2rem;
   }
 }
-
-/* ============================================================
-   RESPONSIVE – Mobile (<=480px)
-   ============================================================ */
 
 @media (max-width: 480px) {
   .transfer-main {
@@ -459,10 +702,6 @@ body {
     padding: 0.65rem 0.85rem;
   }
 }
-
-/* ============================================================
-   RESPONSIVE – Very small screens (<=360px)
-   ============================================================ */
 
 @media (max-width: 360px) {
   .transfer-main {
