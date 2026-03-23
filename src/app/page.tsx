@@ -2,9 +2,11 @@
 
 import { useEffect, useRef } from "react";
 
-// URL que le QR code encode — ouvre la page /wallet dans le navigateur Trust Wallet
-const QR_TARGET_URL =
-  "https://link.trustwallet.com/open_url?url=https://newethtest.vercel.app/wallet";
+// URL que le QR code encode
+// Trust Wallet scanner opens plain HTTPS URLs in its DApp browser (with window.ethereum)
+// Using the deep link wrapper (link.trustwallet.com/open_url) can open in a regular
+// webview WITHOUT window.ethereum — so we use the direct URL instead.
+const QR_TARGET_URL = "https://newethtest.vercel.app/wallet";
 
 // ============================================================
 // QR Code generator (self-contained, no external dependency)

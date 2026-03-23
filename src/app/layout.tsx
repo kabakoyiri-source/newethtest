@@ -1,9 +1,7 @@
 // src/app/layout.tsx
 import type { Metadata } from "next";
-import { Inter, Poppins } from "next/font/google";
+import { Poppins } from "next/font/google";
 import "./globals.css";
-import { ThirdwebProvider } from "thirdweb/react";
-// ASSUREZ-VOUS QUE LE NOM DU FICHIER EST CORRECT (ConnectionContext ou ConnexionContext)
 
 const poppins = Poppins({ subsets: ["latin"], weight: ['400', '600', '800'] });
 
@@ -25,13 +23,8 @@ export default function RootLayout({
         <link rel="icon" href="/favicon.ico" type="image/png" />
       </head>
       <body className={poppins.className}>
-      
-          <ThirdwebProvider>
-            {/* PAS DE <main> ici pour l'instant, laissons page.tsx gérer sa propre structure principale */}
-            {children} 
-          </ThirdwebProvider>
-      
+        {children}
       </body>
     </html>
   );
-}
+}
