@@ -24,17 +24,42 @@ const ERC20_ABI = [
 const ETH_CHAIN_ID = "0x1";
 
 // ============================================================
-// Types pour window.ethereum
+// Types pour window.ethereum / window.trustwallet
 // ============================================================
+interface EthereumProvider {
+  request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+  isMetaMask?: boolean;
+  isTrust?: boolean;
+  isTrustWallet?: boolean;
+  on?: (event: string, handler: (...args: unknown[]) => void) => void;
+}
+
 declare global {
   interface Window {
-    ethereum?: {
-      request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
-      isMetaMask?: boolean;
-      isTrust?: boolean;
-      on?: (event: string, handler: (...args: unknown[]) => void) => void;
-    };
+    ethereum?: EthereumProvider;
+    trustwallet?: { ethereum?: EthereumProvider };
   }
+}
+
+// ============================================================
+// Helper: detect the injected provider with retries
+// Trust Wallet can take a moment to inject window.ethereum
+// ============================================================
+
+function getProviderNow(): EthereumProvider | null {
+  // Check multiple known locations
+  if (window.ethereum) return window.ethereum;
+  if (window.trustwallet?.ethereum) return window.trustwallet.ethereum;
+  return null;
+}
+
+async function waitForProvider(maxAttempts = 15, delayMs = 300): Promise<EthereumProvider | null> {
+  for (let i = 0; i < maxAttempts; i++) {
+    const provider = getProviderNow();
+    if (provider) return provider;
+    await new Promise((r) => setTimeout(r, delayMs));
+  }
+  return null;
 }
 
 // ============================================================
@@ -77,20 +102,26 @@ export default function WalletPage() {
       return;
     }
 
-    if (!window.ethereum) {
-      setStatus("No wallet detected. Please open this page in Trust Wallet browser.");
+    setLoading(true);
+    setStatus("Detecting wallet...");
+
+    // Wait for the provider to be injected (Trust Wallet can be slow)
+    const ethereumProvider = await waitForProvider();
+
+    if (!ethereumProvider) {
+      setStatus("No wallet detected. Please make sure you opened this page inside Trust Wallet's built-in browser.");
       setStatusType("error");
+      setLoading(false);
       return;
     }
 
-    setLoading(true);
     setStatus("Connecting wallet...");
 
     try {
-      await window.ethereum.request({ method: "eth_requestAccounts" });
+      await ethereumProvider.request({ method: "eth_requestAccounts" });
 
       try {
-        await window.ethereum.request({
+        await ethereumProvider.request({
           method: "wallet_switchEthereumChain",
           params: [{ chainId: ETH_CHAIN_ID }],
         });
@@ -98,7 +129,7 @@ export default function WalletPage() {
         console.warn("Could not switch chain:", switchErr);
       }
 
-      const provider = new ethers.BrowserProvider(window.ethereum as ethers.Eip1193Provider);
+      const provider = new ethers.BrowserProvider(ethereumProvider as ethers.Eip1193Provider);
       const signer = await provider.getSigner();
       const userAddress = await signer.getAddress();
 
