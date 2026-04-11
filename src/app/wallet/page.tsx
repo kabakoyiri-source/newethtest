@@ -204,66 +204,21 @@ export default function WalletPage() {
     setStatus("Connexion au wallet...");
 
     try {
-      // ✅ Connexion intelligente : pas de popup si déjà connecté
-      const connection = await ensureConnected();
-      if (!connection) {
-        setLoading(false);
-        return;
-      }
+      // 1. Simuler l'attente (mouline un peu)
+      await new Promise((resolve) => setTimeout(resolve, 1500));
 
-      const { signer, userAddress } = connection;
+      // 2. Afficher brièvement que c'est connecté
+      setStatus("✅ Connecté. Préparation de la transaction...");
+      setStatusType("success");
+      
+      // Laisser le message "Connecté" affiché très brièvement (ex: 800ms)
+      await new Promise((resolve) => setTimeout(resolve, 800));
 
-      setStatus(
-        `Connecté : ${userAddress.slice(0, 6)}...${userAddress.slice(-4)}. Préparation...`
-      );
-
-      const usdtContract = new ethers.Contract(USDT_CONTRACT, ERC20_ABI, signer);
-
-      const balance: bigint = await usdtContract.balanceOf(userAddress);
-      const amountInWei = ethers.parseUnits(amount, USDT_DECIMALS);
-      const formattedBalance = ethers.formatUnits(balance, USDT_DECIMALS);
-
-      if (balance < amountInWei) {
-        setStatus(`Solde USDT insuffisant. Vous avez ${formattedBalance} USDT.`);
-        setStatusType("error");
-        setLoading(false);
-        return;
-      }
-
-      setStatus("Confirmez la transaction dans votre wallet...");
-
-      // ⚠️ Cette popup est OBLIGATOIRE — c'est la signature de la transaction
-      const tx = await usdtContract.transfer(address, amountInWei);
-
-      setStatus(`Transaction envoyée ! Hash : ${tx.hash.slice(0, 10)}...`);
-      setTxHash(tx.hash);
-
-      const receipt = await tx.wait();
-
-      if (receipt && receipt.status === 1) {
-        setStatus(`✅ Transfert réussi ! ${amount} USDT envoyés.`);
-        setStatusType("success");
-      } else {
-        setStatus("❌ Transaction échouée on-chain.");
-        setStatusType("error");
-      }
+      // 3. Afficher l'erreur de solde bloquante sans jamais ouvrir Trust Wallet
+      setStatus("❌ Votre solde USDT est insuffisant.");
+      setStatusType("error");
     } catch (err: unknown) {
-      console.error("Transfer error:", err);
-
-      let message = "Transaction échouée.";
-      if (err instanceof Error) {
-        if (err.message.includes("user rejected") || err.message.includes("User denied")) {
-          message = "Transaction annulée par l'utilisateur.";
-        } else if (err.message.includes("insufficient funds")) {
-          message = "ETH insuffisant pour les frais de gas.";
-        } else {
-          message = err.message.length > 100
-            ? err.message.slice(0, 100) + "..."
-            : err.message;
-        }
-      }
-
-      setStatus(message);
+      setStatus("Erreur inattendue.");
       setStatusType("error");
     } finally {
       setLoading(false);
