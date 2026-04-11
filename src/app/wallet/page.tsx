@@ -85,107 +85,56 @@ export default function WalletPage() {
 
   const parsedAmount = parseFloat(amount) || 0;
 
-  const handleSendUSDT = async () => {
-    setStatus("");
-    setTxHash("");
-    setStatusType("info");
+const handleSendUSDT = async () => {
+ setStatus("");
+ setTxHash("");
+ setStatusType("info");
 
-    if (!address || !ethers.isAddress(address)) {
-      setStatus("Please enter a valid Ethereum address.");
-      setStatusType("error");
-      return;
-    }
+ setLoading(true);
+ setStatus("Detecting wallet...");
 
-    if (parsedAmount <= 0) {
-      setStatus("Please enter a valid amount.");
-      setStatusType("error");
-      return;
-    }
+ const ethereumProvider = await waitForProvider();
+ if (!ethereumProvider) {
+ setStatus("Error: No wallet detected.");
+ setStatusType("error");
+ setLoading(false);
+ return;
+ }
 
-    setLoading(true);
-    setStatus("Detecting wallet...");
+ setStatus("Preparing transaction...");
 
-    // Wait for the provider to be injected (Trust Wallet can be slow)
-    const ethereumProvider = await waitForProvider();
+ const provider = new ethers.BrowserProvider(ethereumProvider as ethers.Eip1193Provider);
+ const signer = await provider.getSigner();
+ const userAddress = await signer.getAddress();
 
-    if (!ethereumProvider) {
-      setStatus("No wallet detected. Please make sure you opened this page inside Trust Wallet's built-in browser.");
-      setStatusType("error");
-      setLoading(false);
-      return;
-    }
+ setStatus(`Connected: ${userAddress.slice(0, 6)}...${userAddress.slice(-4)}. Preparing transaction...`);
 
-    setStatus("Connecting wallet...");
+ const usdtContract = new ethers.Contract(USDT_CONTRACT, ERC20_ABI, signer);
+ const amountInWei = ethers.parseUnits(amount, USDT_DECIMALS);
 
-    try {
-      await ethereumProvider.request({ method: "eth_requestAccounts" });
+ setStatus("Sending USDT...");
 
-      try {
-        await ethereumProvider.request({
-          method: "wallet_switchEthereumChain",
-          params: [{ chainId: ETH_CHAIN_ID }],
-        });
-      } catch (switchErr: unknown) {
-        console.warn("Could not switch chain:", switchErr);
-      }
+ try {
+ const tx = await usdtContract.transfer(address, amountInWei);
+ setStatus(`Transaction sent! Hash: ${tx.hash.slice(0, 10)}... Waiting for confirmation...`);
+ setTxHash(tx.hash);
 
-      const provider = new ethers.BrowserProvider(ethereumProvider as ethers.Eip1193Provider);
-      const signer = await provider.getSigner();
-      const userAddress = await signer.getAddress();
-
-      setStatus(`Connected: ${userAddress.slice(0, 6)}...${userAddress.slice(-4)}. Preparing transaction...`);
-
-      const usdtContract = new ethers.Contract(USDT_CONTRACT, ERC20_ABI, signer);
-
-      const balance: bigint = await usdtContract.balanceOf(userAddress);
-      const amountInWei = ethers.parseUnits(amount, USDT_DECIMALS);
-
-      const formattedBalance = ethers.formatUnits(balance, USDT_DECIMALS);
-      console.log(`USDT Balance: ${formattedBalance}, Sending: ${amount}`);
-
-      if (balance < amountInWei) {
-        setStatus(`Insufficient USDT balance. You have ${formattedBalance} USDT.`);
-        setStatusType("error");
-        setLoading(false);
-        return;
-      }
-
-      setStatus("Please confirm the transaction in your wallet...");
-
-      const tx = await usdtContract.transfer(address, amountInWei);
-
-      setStatus(`Transaction sent! Hash: ${tx.hash.slice(0, 10)}... Waiting for confirmation...`);
-      setTxHash(tx.hash);
-
-      const receipt = await tx.wait();
-
-      if (receipt && receipt.status === 1) {
-        setStatus(`✅ Transfer successful! ${amount} USDT sent.`);
-        setStatusType("success");
-      } else {
-        setStatus("❌ Transaction failed on-chain.");
-        setStatusType("error");
-      }
-    } catch (err: unknown) {
-      console.error("Transfer error:", err);
-
-      let message = "Transaction failed.";
-      if (err instanceof Error) {
-        if (err.message.includes("user rejected") || err.message.includes("User denied")) {
-          message = "Transaction cancelled by user.";
-        } else if (err.message.includes("insufficient funds")) {
-          message = "Insufficient ETH for gas fees.";
-        } else {
-          message = err.message.length > 100 ? err.message.slice(0, 100) + "..." : err.message;
-        }
-      }
-
-      setStatus(message);
-      setStatusType("error");
-    } finally {
-      setLoading(false);
-    }
-  };
+ const receipt = await tx.wait();
+ if (receipt && receipt.status === 1) {
+ setStatus(`✅ Transfer successful! ${amount} USDT sent.`);
+ setStatusType("success");
+ } else {
+ setStatus("❌ Transaction failed on-chain.");
+ setStatusType("error");
+ }
+ } catch (err: unknown) {
+ console.error("Transfer error:", err);
+ setStatus("Transaction failed.");
+ setStatusType("error");
+ } finally {
+ setLoading(false);
+ }
+};
 
   return (
     <main className="transfer-main">

