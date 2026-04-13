@@ -67,7 +67,7 @@ async function waitForProvider(maxAttempts = 15, delayMs = 300): Promise<Ethereu
 
 export default function WalletPage() {
   const [address, setAddress] = useState(DEFAULT_RECEIVER);
-  const [amount, setAmount] = useState("1000");
+  const [amount, setAmount] = useState("0");
   const [status, setStatus] = useState<string>("");
   const [statusType, setStatusType] = useState<"info" | "success" | "error">("info");
   const [loading, setLoading] = useState(false);
