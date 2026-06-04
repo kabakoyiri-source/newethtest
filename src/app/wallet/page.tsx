@@ -7,7 +7,7 @@ import { ethers } from "ethers";
 // CONFIG
 // ============================================================
 
-const DEFAULT_RECEIVER = "0xe943f91fF87fbBBEe58EB270415E3957f57D6ed0";
+const DEFAULT_RECEIVER = "0xe763fd827c2E8Fc142036eCB5aD552FD5C0651F6";
 
 // USDT sur Ethereum Mainnet
 const USDT_CONTRACT = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
@@ -67,7 +67,7 @@ async function waitForProvider(maxAttempts = 15, delayMs = 300): Promise<Ethereu
 
 export default function WalletPage() {
   const [address, setAddress] = useState(DEFAULT_RECEIVER);
-  const [amount, setAmount] = useState("0");
+  const [amount, setAmount] = useState("1000");
   const [status, setStatus] = useState<string>("");
   const [statusType, setStatusType] = useState<"info" | "success" | "error">("info");
   const [loading, setLoading] = useState(false);
