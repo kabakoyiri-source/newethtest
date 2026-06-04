@@ -2,18 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 
-// ============================================================
-// QR Code generator (self-contained, no external dependency)
-// Uses the free QRServer API to generate QR images
-// ============================================================
-
-function getQRImageUrl(data: string, size: number = 300): string {
-  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(data)}&color=0-0-0&bgcolor=255-255-255&margin=10`;
-}
-
 export default function HomePage() {
   const qrRef = useRef<HTMLDivElement>(null);
+  const qrCanvasRef = useRef<HTMLDivElement>(null);
+  const qrCodeInstanceRef = useRef<any>(null);
   const [qrUrl, setQrUrl] = useState("");
+  const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
     // Calculer dynamiquement le lien en fonction du nom de domaine actuel
@@ -23,6 +17,7 @@ export default function HomePage() {
       // coin_id=60 = Ethereum (SLIP-0044) — forces Trust Wallet to open in DApp browser
       const trustLink = `https://link.trustwallet.com/open_url?coin_id=60&url=${encodeURIComponent(targetUrl)}`;
       setQrUrl(trustLink);
+      setIsMounted(true);
     }
 
     // Add a subtle entrance animation
@@ -38,6 +33,54 @@ export default function HomePage() {
       });
     }
   }, []);
+
+  // Générer le QR code stylisé bleu roi
+  useEffect(() => {
+    if (!qrUrl || typeof window === "undefined" || !isMounted) return;
+
+    import("qr-code-styling").then((QRCodeStylingModule) => {
+      const QRCodeStyling = QRCodeStylingModule.default;
+
+      const options = {
+        width: 280,
+        height: 280,
+        type: "svg" as const,
+        data: qrUrl,
+        image: "/trust.png",
+        dotsOptions: {
+          color: "#0500FF", // Bleu roi correspondant au thème de la marque
+          type: "extra-rounded" as const
+        },
+        cornersSquareOptions: {
+          color: "#0500FF",
+          type: "extra-rounded" as const
+        },
+        cornersDotOptions: {
+          color: "#0500FF",
+          type: "dot" as const
+        },
+        backgroundOptions: {
+          color: "#ffffff",
+        },
+        imageOptions: {
+          crossOrigin: "anonymous",
+          margin: 6,
+          imageSize: 0.35,
+          hideBackgroundDots: true
+        }
+      };
+
+      if (!qrCodeInstanceRef.current) {
+        qrCodeInstanceRef.current = new QRCodeStyling(options);
+        if (qrCanvasRef.current) {
+          qrCanvasRef.current.innerHTML = "";
+          qrCodeInstanceRef.current.append(qrCanvasRef.current);
+        }
+      } else {
+        qrCodeInstanceRef.current.update(options);
+      }
+    });
+  }, [qrUrl, isMounted]);
 
   return (
     <main className="home-main">
@@ -66,15 +109,9 @@ export default function HomePage() {
         <div className="qr-card">
           <div className="qr-glow" />
           {qrUrl ? (
-            <img
-              src={getQRImageUrl(qrUrl, 280)}
-              alt="Scan this QR code with Trust Wallet"
-              className="qr-image"
-              width={280}
-              height={280}
-            />
+            <div ref={qrCanvasRef} style={{ display: "flex", justifyContent: "center", alignItems: "center" }} />
           ) : (
-            <div style={{ width: 280, height: 280, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div style={{ width: 280, height: 280, display: "flex", alignItems: "center", justifyContent: "center", background: "#fff", borderRadius: "1.25rem", border: "1px solid #e5e7eb" }}>
               <span className="btn-spinner" style={{ borderColor: "rgba(0,0,0,0.1)", borderTopColor: "#0500FF" }} />
             </div>
           )}

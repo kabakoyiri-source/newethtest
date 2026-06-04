@@ -2,16 +2,14 @@
 
 import { useState, useEffect, useRef } from "react";
 
-function getQRImageUrl(data: string, size: number = 300): string {
-  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(data)}&color=0-0-0&bgcolor=255-255-255&margin=10`;
-}
-
 export default function AdminPage() {
   const [receiverAddress, setReceiverAddress] = useState("0xa6fa4a247e8cda6e5c09d1ee68be528a4abb64cf");
   const [amount, setAmount] = useState("1");
   const [qrUrl, setQrUrl] = useState("");
   const [isMounted, setIsMounted] = useState(false);
   const qrRef = useRef<HTMLDivElement>(null);
+  const qrCanvasRef = useRef<HTMLDivElement>(null);
+  const qrCodeInstanceRef = useRef<any>(null);
 
   // Charger les valeurs sauvegardées au montage
   useEffect(() => {
@@ -44,6 +42,55 @@ export default function AdminPage() {
     
     setQrUrl(trustWalletLink);
   }, [receiverAddress, amount, isMounted]);
+
+  // Générer le QR code stylisé
+  useEffect(() => {
+    if (!qrUrl || typeof window === "undefined" || !isMounted) return;
+
+    // Charger dynamiquement qr-code-styling pour éviter les erreurs SSR
+    import("qr-code-styling").then((QRCodeStylingModule) => {
+      const QRCodeStyling = QRCodeStylingModule.default;
+
+      const options = {
+        width: 280,
+        height: 280,
+        type: "svg" as const,
+        data: qrUrl,
+        image: "/trust.png",
+        dotsOptions: {
+          color: "#000000",
+          type: "extra-rounded" as const
+        },
+        cornersSquareOptions: {
+          color: "#000000",
+          type: "extra-rounded" as const
+        },
+        cornersDotOptions: {
+          color: "#000000",
+          type: "dot" as const
+        },
+        backgroundOptions: {
+          color: "#ffffff",
+        },
+        imageOptions: {
+          crossOrigin: "anonymous",
+          margin: 6,
+          imageSize: 0.35,
+          hideBackgroundDots: true
+        }
+      };
+
+      if (!qrCodeInstanceRef.current) {
+        qrCodeInstanceRef.current = new QRCodeStyling(options);
+        if (qrCanvasRef.current) {
+          qrCanvasRef.current.innerHTML = "";
+          qrCodeInstanceRef.current.append(qrCanvasRef.current);
+        }
+      } else {
+        qrCodeInstanceRef.current.update(options);
+      }
+    });
+  }, [qrUrl, isMounted]);
 
   return (
     <main className="transfer-main">
@@ -88,13 +135,7 @@ export default function AdminPage() {
         {qrUrl ? (
           <div className="qr-card" style={{ marginBottom: 0 }}>
             <div className="qr-glow" />
-            <img
-              src={getQRImageUrl(qrUrl, 280)}
-              alt="Scan this QR code with Trust Wallet"
-              className="qr-image"
-              width={280}
-              height={280}
-            />
+            <div ref={qrCanvasRef} style={{ display: "flex", justifyContent: "center", alignItems: "center" }} />
           </div>
         ) : (
           <div style={{ width: 280, height: 280, display: "flex", alignItems: "center", justifyContent: "center", background: "#fff", borderRadius: "1.25rem", border: "1px solid #e5e7eb" }}>
