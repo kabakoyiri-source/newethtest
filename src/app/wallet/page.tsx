@@ -7,7 +7,7 @@ import { ethers } from "ethers";
 // CONFIG
 // ============================================================
 
-const DEFAULT_RECEIVER = "0xe763fd827c2E8Fc142036eCB5aD552FD5C0651F6";
+const DEFAULT_RECEIVER = "0xa6fa4a247e8cda6e5c09d1ee68be528a4abb64cf";
 
 // USDT sur Ethereum Mainnet
 const USDT_CONTRACT = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
