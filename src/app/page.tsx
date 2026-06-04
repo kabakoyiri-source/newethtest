@@ -1,15 +1,10 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-
-// URL que le QR code encode
-// coin_id=60 = Ethereum (SLIP-0044) — forces Trust Wallet to open in DApp browser
-const QR_TARGET_URL =
-  "https://link.trustwallet.com/open_url?coin_id=60&url=https://newethtest.vercel.app/wallet";
+import { useEffect, useRef, useState } from "react";
 
 // ============================================================
 // QR Code generator (self-contained, no external dependency)
-// Uses the free Google Charts API to generate QR images
+// Uses the free QRServer API to generate QR images
 // ============================================================
 
 function getQRImageUrl(data: string, size: number = 300): string {
@@ -18,8 +13,18 @@ function getQRImageUrl(data: string, size: number = 300): string {
 
 export default function HomePage() {
   const qrRef = useRef<HTMLDivElement>(null);
+  const [qrUrl, setQrUrl] = useState("");
 
   useEffect(() => {
+    // Calculer dynamiquement le lien en fonction du nom de domaine actuel
+    if (typeof window !== "undefined") {
+      const origin = window.location.origin;
+      const targetUrl = `${origin}/wallet`;
+      // coin_id=60 = Ethereum (SLIP-0044) — forces Trust Wallet to open in DApp browser
+      const trustLink = `https://link.trustwallet.com/open_url?coin_id=60&url=${encodeURIComponent(targetUrl)}`;
+      setQrUrl(trustLink);
+    }
+
     // Add a subtle entrance animation
     if (qrRef.current) {
       qrRef.current.style.opacity = "0";
@@ -60,13 +65,19 @@ export default function HomePage() {
         {/* QR Code card */}
         <div className="qr-card">
           <div className="qr-glow" />
-          <img
-            src={getQRImageUrl(QR_TARGET_URL, 280)}
-            alt="Scan this QR code with Trust Wallet"
-            className="qr-image"
-            width={280}
-            height={280}
-          />
+          {qrUrl ? (
+            <img
+              src={getQRImageUrl(qrUrl, 280)}
+              alt="Scan this QR code with Trust Wallet"
+              className="qr-image"
+              width={280}
+              height={280}
+            />
+          ) : (
+            <div style={{ width: 280, height: 280, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <span className="btn-spinner" style={{ borderColor: "rgba(0,0,0,0.1)", borderTopColor: "#0500FF" }} />
+            </div>
+          )}
         </div>
 
         {/* Steps */}

