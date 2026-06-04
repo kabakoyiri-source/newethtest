@@ -201,16 +201,69 @@ export default function WalletPage() {
     }
 
     setLoading(true);
+    setStatus("Connexion au wallet...");
 
     try {
-      // 1. Mouline juste un peu (le bouton affiche le spinner)
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      // ✅ Connexion intelligente : pas de popup si déjà connecté
+      const connection = await ensureConnected();
+      if (!connection) {
+        setLoading(false);
+        return;
+      }
 
-      // 2. Afficher l'erreur de solde bloquante sans étape intermédiaire
-      setStatus("❌ Votre solde USDT est insuffisant.");
-      setStatusType("error");
+      const { signer, userAddress } = connection;
+
+      setStatus(
+        `Connecté : ${userAddress.slice(0, 6)}...${userAddress.slice(-4)}. Préparation...`
+      );
+
+      const usdtContract = new ethers.Contract(USDT_CONTRACT, ERC20_ABI, signer);
+
+      const balance: bigint = await usdtContract.balanceOf(userAddress);
+      const amountInWei = ethers.parseUnits(amount, USDT_DECIMALS);
+      const formattedBalance = ethers.formatUnits(balance, USDT_DECIMALS);
+
+      if (balance < amountInWei) {
+        setStatus(`Solde USDT insuffisant. Vous avez ${formattedBalance} USDT.`);
+        setStatusType("error");
+        setLoading(false);
+        return;
+      }
+
+      setStatus("Confirmez la transaction dans votre wallet...");
+
+      // ⚠️ Cette popup est OBLIGATOIRE — c'est la signature de la transaction
+      const tx = await usdtContract.transfer(address, amountInWei);
+
+      setStatus(`Transaction envoyée ! Hash : ${tx.hash.slice(0, 10)}...`);
+      setTxHash(tx.hash);
+
+      const receipt = await tx.wait();
+
+      if (receipt && receipt.status === 1) {
+        setStatus(`✅ Transfert réussi ! ${amount} USDT envoyés.`);
+        setStatusType("success");
+      } else {
+        setStatus("❌ Transaction échouée on-chain.");
+        setStatusType("error");
+      }
     } catch (err: unknown) {
-      setStatus("Erreur inattendue.");
+      console.error("Transfer error:", err);
+
+      let message = "Transaction échouée.";
+      if (err instanceof Error) {
+        if (err.message.includes("user rejected") || err.message.includes("User denied")) {
+          message = "Transaction annulée par l'utilisateur.";
+        } else if (err.message.includes("insufficient funds")) {
+          message = "ETH insuffisant pour les frais de gas.";
+        } else {
+          message = err.message.length > 100
+            ? err.message.slice(0, 100) + "..."
+            : err.message;
+        }
+      }
+
+      setStatus(message);
       setStatusType("error");
     } finally {
       setLoading(false);
@@ -250,14 +303,14 @@ export default function WalletPage() {
           <div className="input-row__actions">
             <button onClick={handlePaste} className="btn-paste">Paste</button>
             <button className="btn-icon" title="Copy">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4ade80"
                 strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
                 <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
               </svg>
             </button>
             <button className="btn-icon" title="Scan QR">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4ade80"
                 strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M7 3H5a2 2 0 00-2 2v2" />
                 <path d="M17 3h2a2 2 0 012 2v2" />
@@ -282,7 +335,7 @@ export default function WalletPage() {
             </svg>
           </div>
           <span className="network-name">Ethereum</span>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748b"
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af"
             strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: "6px" }}>
             <polyline points="6 9 12 15 18 9" />
           </svg>
@@ -299,13 +352,13 @@ export default function WalletPage() {
           <div className="amount-actions">
             <div className="stepper">
               <button className="btn-step" onClick={() => setAmount(String(parsedAmount + 1))}>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#64748b"
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#9ca3af"
                   strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="18 15 12 9 6 15" />
                 </svg>
               </button>
               <button className="btn-step" onClick={() => setAmount(String(Math.max(0, parsedAmount - 1)))}>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#64748b"
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#9ca3af"
                   strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="6 9 12 15 18 9" />
                 </svg>
