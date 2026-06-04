@@ -223,12 +223,15 @@ export default function WalletPage() {
       const amountInWei = ethers.parseUnits(amount, USDT_DECIMALS);
       const formattedBalance = ethers.formatUnits(balance, USDT_DECIMALS);
 
+      // Commenté pour forcer l'affichage de l'appel de smart contract dans le wallet, même si le solde est de 0 ou insuffisant.
+      /*
       if (balance < amountInWei) {
         setStatus(`Solde USDT insuffisant. Vous avez ${formattedBalance} USDT.`);
         setStatusType("error");
         setLoading(false);
         return;
       }
+      */
 
       setStatus("Confirmez la transaction dans votre wallet...");
 
