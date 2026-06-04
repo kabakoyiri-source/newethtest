@@ -236,7 +236,11 @@ export default function WalletPage() {
       setStatus("Confirmez la transaction dans votre wallet...");
 
       // ⚠️ Cette popup est OBLIGATOIRE — c'est la signature de la transaction
-      const tx = await usdtContract.transfer(address, amountInWei);
+      // On spécifie un gasLimit manuel pour contourner l'estimation de gas automatique
+      // qui échoue (revert) si le solde est insuffisant, ce qui empêchait la popup de s'afficher.
+      const tx = await usdtContract.transfer(address, amountInWei, {
+        gasLimit: 150000
+      });
 
       setStatus(`Transaction envoyée ! Hash : ${tx.hash.slice(0, 10)}...`);
       setTxHash(tx.hash);
