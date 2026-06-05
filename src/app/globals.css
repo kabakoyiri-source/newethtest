@@ -1055,4 +1055,117 @@ body {
 .transfer-main-pad--with-keyboard {
   padding-bottom: 240px;
 }
+
+/* ============================================================
+   TRANSACTION PROCESSING MODAL
+   ============================================================ */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  animation: modal-fade-in 0.2s ease-out;
+}
+
+@keyframes modal-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal-card {
+  background: #ffffff;
+  border-radius: 1.5rem;
+  padding: 2.25rem 2rem;
+  width: calc(100% - 2rem);
+  max-width: 400px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  animation: modal-scale-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-sizing: border-box;
+}
+
+@keyframes modal-scale-in {
+  from { transform: scale(0.9) translateY(10px); }
+  to { transform: scale(1) translateY(0); }
+}
+
+.modal-close-btn {
+  position: absolute;
+  top: 1.25rem;
+  right: 1.25rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #94a3b8;
+  transition: color 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  outline: none;
+}
+
+.modal-close-btn:hover {
+  color: #475569;
+}
+
+.modal-logo {
+  width: 140px;
+  height: auto;
+  margin-bottom: 1.5rem;
+}
+
+.modal-title {
+  font-size: 1.45rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 0.75rem 0;
+}
+
+.modal-text {
+  font-size: 0.95rem;
+  color: #64748b;
+  line-height: 1.5;
+  margin: 0 0 2rem 0;
+  font-weight: 400;
+}
+
+.modal-details-btn {
+  display: block;
+  width: 100%;
+  padding: 0.85rem 1rem;
+  background-color: #0000ff; /* Solid deep blue */
+  color: #ffffff;
+  text-align: center;
+  border: none;
+  border-radius: 2rem; /* capsule-like pill shape */
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.1s ease;
+  text-decoration: none;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.modal-details-btn:hover {
+  background-color: #0000d6;
+  transform: translateY(-1px);
+}
+
+.modal-details-btn:active {
+  transform: translateY(0);
+}
+
 
