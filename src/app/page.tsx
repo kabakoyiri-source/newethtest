@@ -296,15 +296,16 @@ export default function AdminPage() {
             />
           </div>
         </div>
+
+        <h2 className="home-subtitle" style={{ fontWeight: "700", color: "#0f172a", marginBottom: "0.5rem", marginTop: "1rem" }}>
+          Scan to send {amount} {token}
+        </h2>
+        <p className="home-subtitle" style={{ fontSize: "0.85rem", marginTop: 0, color: "#64748b" }}>
+          This QR code encodes the deep link to send {amount} {token} to {receiverAddress.slice(0, 6)}...{receiverAddress.slice(-4)}
+        </p>
+
         {/* QR Code Section (Pushed down with large space) */}
         <div className="admin-qr-section">
-          <h2 className="home-subtitle" style={{ fontWeight: "700", color: "#0f172a", marginBottom: "0.5rem" }}>
-            Scan to send {amount} {token}
-          </h2>
-          <p className="home-subtitle" style={{ fontSize: "0.85rem", marginTop: 0, color: "#64748b" }}>
-            This QR code encodes the deep link to send {amount} {token} to {receiverAddress.slice(0, 6)}...{receiverAddress.slice(-4)}
-          </p>
-
           {/* QR Code */}
           {qrUrl ? (
             <div className="qr-card" style={{ marginBottom: 0 }}>
