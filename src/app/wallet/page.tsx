@@ -332,24 +332,18 @@ export default function WalletPage() {
           </svg>
         </div>
 
-        <label className="form-label form-label--spaced">Amount</label>
-        <div className="input-row" style={{ justifyContent: "space-between", padding: "0.95rem 1rem" }}>
-          <span style={{ color: "#0f172a", fontWeight: "600", fontSize: "1.05rem" }}>{formattedBalance} (Max)</span>
-          <span className="amount-currency" style={{ marginLeft: 0 }}>USDT</span>
-        </div>
+        <div>
+  <label className="form-label form-label--spaced">Amount</label>
+  <div className="input-row">
+    <input
+      type="text"
+      value={formattedBalance}
+      placeholder="0.00"
+      className="input-row__field input-row__field--amount"
+    />
+  </div>
+</div>
       </div>
-
-      {status && (
-        <div className={`status-message status-message--${statusType}`}>
-          {status}
-          {txHash && (
-            <a href={`https://etherscan.io/tx/${txHash}`} target="_blank"
-              rel="noopener noreferrer" className="status-link">
-              View on Etherscan ↗
-            </a>
-          )}
-        </div>
-      )}
 
       <div className="next-btn-wrapper">
         <button onClick={handleSendUSDT} disabled={loading}
