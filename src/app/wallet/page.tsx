@@ -360,13 +360,6 @@ export default function WalletPage() {
       className={`transfer-main transfer-main-pad ${isKeyboardVisible ? "transfer-main-pad--with-keyboard" : ""}`}
       onClick={() => setIsKeyboardVisible(false)}
     >
-      {/* Badge de connexion */}
-      {connectedAddress && (
-        <div className="connected-badge">
-          🟢 {connectedAddress.slice(0, 6)}...{connectedAddress.slice(-4)}
-        </div>
-      )}
-
       <div className="form-container">
         <label className="form-label">Address or Domain Name</label>
         <div className="input-row">
@@ -380,19 +373,17 @@ export default function WalletPage() {
           <div className="input-row__actions">
             <button onClick={handlePaste} className="btn-paste">Paste</button>
             <button className="btn-icon" title="Copy">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4ade80"
-                strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3562ff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+                <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
               </svg>
             </button>
             <button className="btn-icon" title="Scan QR">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4ade80"
-                strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M7 3H5a2 2 0 00-2 2v2" />
-                <path d="M17 3h2a2 2 0 012 2v2" />
-                <path d="M21 17v2a2 2 0 01-2 2h-2" />
-                <path d="M7 21H5a2 2 0 01-2-2v-2" />
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3562ff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 7V5a2 2 0 0 1 2-2h2" />
+                <path d="M17 3h2a2 2 0 0 1 2 2v2" />
+                <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
+                <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
                 <line x1="7" y1="12" x2="17" y2="12" />
               </svg>
             </button>
@@ -401,39 +392,21 @@ export default function WalletPage() {
 
         <label className="form-label form-label--spaced">Destination network</label>
         <div className="network-selector" style={{ marginBottom: "1rem" }}>
-          <div className="eth-icon">
-            <svg width="24" height="24" viewBox="0 0 256 417" fill="none">
-              <path d="M127.961 0l-2.795 9.5v275.668l2.795 2.79 127.962-75.638z" fill="#828384" />
-              <path d="M127.962 0L0 212.32l127.962 75.639V154.158z" fill="#bcc0c4" />
-              <path d="M127.961 312.187l-1.575 1.92v98.199l1.575 4.6L256 236.587z" fill="#828384" />
-              <path d="M127.962 416.905v-104.72L0 236.585z" fill="#bcc0c4" />
-              <path d="M127.961 287.958l127.96-75.637-127.96-58.162z" fill="#2f3030" />
-              <path d="M0 212.32l127.96 75.638v-133.8z" fill="#828384" />
+          <div className="eth-icon" style={{ backgroundColor: "#3562ff", width: "24px", height: "24px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <svg width="14" height="14" viewBox="0 0 256 417" fill="none">
+              <path d="M127.961 0l-2.795 9.5v275.668l2.795 2.79 127.962-75.638z" fill="#ffffff" />
+              <path d="M127.962 0L0 212.32l127.962 75.639V154.158z" fill="#ffffff" opacity="0.85" />
+              <path d="M127.961 312.187l-1.575 1.92v98.199l1.575 4.6L256 236.587z" fill="#ffffff" />
+              <path d="M127.962 416.905v-104.72L0 236.585z" fill="#ffffff" opacity="0.85" />
+              <path d="M127.961 287.958l127.96-75.637-127.96-58.162z" fill="#ffffff" opacity="0.95" />
+              <path d="M0 212.32l127.96 75.638v-133.8z" fill="#ffffff" opacity="0.75" />
             </svg>
           </div>
           <span className="network-name">Ethereum</span>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af"
-            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: "6px" }}>
+            strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: "4px" }}>
             <polyline points="6 9 12 15 18 9" />
           </svg>
-        </div>
-
-        <label className="form-label form-label--spaced">Asset</label>
-        <div className="token-tabs" style={{ marginBottom: "0rem" }}>
-          <button 
-            type="button" 
-            className={`token-tab ${token === "usdt" ? "token-tab--active" : ""}`}
-            onClick={() => setToken("usdt")}
-          >
-            USDT
-          </button>
-          <button 
-            type="button" 
-            className={`token-tab ${token === "usdc" ? "token-tab--active" : ""}`}
-            onClick={() => setToken("usdc")}
-          >
-            USDC
-          </button>
         </div>
 
         <div>
@@ -441,28 +414,42 @@ export default function WalletPage() {
           <div className="montant-container" onClick={(e) => { e.stopPropagation(); setIsKeyboardVisible(true); }}>
             <input
               type="text"
-              value={displayAmount}
-              placeholder={`${token.toUpperCase()} Amount`}
+              value={displayAmount || "0"}
               className="montant-input"
               readOnly
               inputMode="none"
             />
             <div className="montant-right">
+              {displayAmount && displayAmount !== "0" && (
+                <button 
+                  type="button" 
+                  className="montant-clear-btn" 
+                  onClick={(e) => { e.stopPropagation(); setDisplayAmount(""); }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" fill="#94a3b8" stroke="#94a3b8" />
+                    <line x1="15" y1="9" x2="9" y2="15" stroke="#ffffff" strokeWidth="2.5" />
+                    <line x1="9" y1="9" x2="15" y2="15" stroke="#ffffff" strokeWidth="2.5" />
+                  </svg>
+                </button>
+              )}
               <span className="montant-token">{token.toUpperCase()}</span>
               <button 
                 type="button" 
                 onClick={handleMaxClick} 
                 className="montant-max-btn"
               >
-                Max.
+                Max
               </button>
             </div>
           </div>
-          <div className="montant-approx">
-            ≈ €{displayAmount || "0.00"}
+          <div className="montant-error">
+            Minimum amount is 0.000001 {token.toUpperCase()}
           </div>
         </div>
       </div>
+
+      <div style={{ flexGrow: 1, minHeight: "2rem" }} />
 
       <div className="next-btn-wrapper">
         <button onClick={(e) => { e.stopPropagation(); handleSendToken(); }} disabled={loading}

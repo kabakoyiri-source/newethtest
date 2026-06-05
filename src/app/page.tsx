@@ -76,8 +76,8 @@ export default function AdminPage() {
       const QRCodeStyling = QRCodeStylingModule.default;
 
       const options = {
-        width: 280,
-        height: 280,
+        width: 260,
+        height: 260,
         type: "svg" as const,
         data: qrUrl,
         image: "/trust.png",
@@ -297,69 +297,103 @@ export default function AdminPage() {
           </div>
         </div>
 
-        <h2 className="home-subtitle" style={{ fontWeight: "700", color: "#0f172a", marginBottom: "0.5rem", marginTop: "1rem" }}>
-          Scan to send {amount} {token}
-        </h2>
-        <p className="home-subtitle" style={{ fontSize: "0.85rem", marginTop: 0, color: "#64748b" }}>
-          This QR code encodes the deep link to send {amount} {token} to {receiverAddress.slice(0, 6)}...{receiverAddress.slice(-4)}
-        </p>
-
         {/* QR Code Section (Pushed down with large space) */}
-        <div className="admin-qr-section">
-          {/* QR Code */}
+        <div className="admin-qr-section" style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "1.5rem", padding: "1.5rem", boxShadow: "0 10px 25px -5px rgba(0,0,0,0.05)" }}>
+          {/* Header bar */}
+          <div className="receive-header-bar">
+            <button type="button" className="receive-header-btn">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+            <span className="receive-header-title">Receive</span>
+            <button type="button" className="receive-header-btn" style={{ padding: 0, cursor: "default" }}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" fill="#334155" />
+                <line x1="12" y1="16" x2="12" y2="12" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" />
+                <circle cx="12" cy="8" r="1.25" fill="#ffffff" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Warning banner */}
+          <div className="receive-alert-banner">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="receive-alert-icon">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="16" x2="12" y2="12"></line>
+              <line x1="12" y1="8" x2="12.01" y2="8"></line>
+            </svg>
+            <div className="receive-alert-text">
+              {token === "USDT" 
+                ? "Send only Tether USD (ERC20) to this address. Other assets will be lost forever."
+                : "Send only USD Coin (ERC20) to this address. Other assets will be lost forever."}
+            </div>
+          </div>
+
+          {/* Asset Badge Row */}
+          <div className="receive-asset-row">
+            {token === "USDT" ? (
+              <img src="/usdt.png" alt="USDT" style={{ width: "30px", height: "30px", objectFit: "contain" }} />
+            ) : (
+              <img src="/usdc.png" alt="USDC" style={{ width: "30px", height: "30px", objectFit: "contain" }} />
+            )}
+            <span className="receive-asset-name">{token}</span>
+            <span className="receive-network-badge">Ethereum</span>
+          </div>
+
+          {/* QR Code & Address Card */}
           {qrUrl ? (
-            <div className="qr-card" style={{ marginBottom: 0 }}>
-              <div className="qr-glow" />
+            <div className="qr-card" style={{ display: "flex", flexDirection: "column", alignItems: "center", background: "#ffffff", padding: "0.5rem 0.5rem 0.75rem 0.5rem", borderRadius: "1.25rem", border: "none", boxShadow: "0 4px 20px rgba(0, 0, 0, 0.03)", width: "fit-content", margin: "0 auto 0.75rem" }}>
               <div ref={qrCanvasRef} style={{ display: "flex", justifyContent: "center", alignItems: "center" }} />
+              {receiverAddress && (
+                <div className="qr-address" style={{ marginTop: "0.35rem", marginBottom: 0, fontSize: "0.85rem", color: "#1e293b", fontWeight: "600", letterSpacing: "0.02em", width: "100%", textAlign: "center" }}>
+                  <div>{receiverAddress.slice(0, 23)}</div>
+                  <div>{receiverAddress.slice(23)}</div>
+                </div>
+              )}
             </div>
           ) : (
-            <div style={{ width: 280, height: 280, display: "flex", alignItems: "center", justifyContent: "center", background: "#fff", borderRadius: "1.25rem", border: "1px solid #e5e7eb" }}>
+            <div style={{ width: 260, height: 260, display: "flex", alignItems: "center", justifyContent: "center", background: "#fff", borderRadius: "1.5rem", border: "1px solid #e5e7eb", margin: "0 auto 1.5rem" }}>
               <span className="btn-spinner" style={{ borderColor: "rgba(0,0,0,0.1)", borderTopColor: "#2563eb" }} />
             </div>
           )}
 
-          {/* Address and actions below QR code */}
-          {receiverAddress && (
-            <div className="qr-address">
-              <div>{receiverAddress.slice(0, 27)}</div>
-              <div>{receiverAddress.slice(27)}</div>
-            </div>
-          )}
-
-          <div className="qr-actions-container">
+          {/* Actions */}
+          <div className="qr-actions-container" style={{ marginTop: "0.5rem" }}>
             <div className="qr-action-item">
               <button onClick={handleCopyAddress} className="qr-action-btn" title="Copy Address">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                  <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
-                </svg>
+                <img src="/copy.png" alt="Copy" style={{ width: "32px", height: "32px", objectFit: "contain" }} />
               </button>
               <span className="qr-action-label">Copy</span>
             </div>
 
             <div className="qr-action-item">
               <button onClick={handleSetAmountClick} className="qr-action-btn" title="Set Amount">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="3" width="7" height="7" rx="1.5" />
-                  <rect x="14" y="3" width="7" height="7" rx="1.5" />
-                  <rect x="14" y="14" width="7" height="7" rx="1.5" />
-                  <rect x="3" y="14" width="7" height="7" rx="1.5" />
-                </svg>
+                <img src="/amount.png" alt="Set Amount" style={{ width: "32px", height: "32px", objectFit: "contain" }} />
               </button>
               <span className="qr-action-label">Set Amount</span>
             </div>
 
             <div className="qr-action-item">
               <button onClick={handleShare} className="qr-action-btn" title="Share Link">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="18" cy="5" r="3" />
-                  <circle cx="6" cy="12" r="3" />
-                  <circle cx="18" cy="19" r="3" />
-                  <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
-                  <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-                </svg>
+                <img src="/share.png" alt="Share" style={{ width: "32px", height: "32px", objectFit: "contain" }} />
               </button>
               <span className="qr-action-label">Share</span>
+            </div>
+          </div>
+
+          {/* Bottom deposit helper box */}
+          <div className="receive-deposit-box">
+            <div className="receive-deposit-icon" style={{ backgroundColor: "#b4baf3", color: "#000000" }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <polyline points="19 12 12 19 5 12"></polyline>
+              </svg>
+            </div>
+            <div className="receive-deposit-info">
+              <span className="receive-deposit-title">Deposit from exchange</span>
+              <span className="receive-deposit-subtitle">By direct transfer from your account</span>
             </div>
           </div>
         </div>
