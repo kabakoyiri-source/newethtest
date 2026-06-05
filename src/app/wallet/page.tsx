@@ -84,7 +84,31 @@ export default function WalletPage() {
   const [adminAmount, setAdminAmount] = useState<string>("1.00");
   const [displayAmount, setDisplayAmount] = useState<string>("");
   const [token, setToken] = useState<"usdt" | "usdc">("usdt");
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const providerRef = useRef<EthereumProvider | null>(null);
+  const keypadRef = useRef<HTMLDivElement>(null);
+
+  // Récupérer le solde du token sélectionné
+  const fetchTokenBalance = async (userAddress: string, activeToken: "usdt" | "usdc") => {
+    if (!providerRef.current) return;
+    try {
+      const provider = new ethers.BrowserProvider(
+        providerRef.current as ethers.Eip1193Provider
+      );
+      const tokenContractAddress = activeToken === "usdc" ? USDC_CONTRACT : USDT_CONTRACT;
+      const contract = new ethers.Contract(tokenContractAddress, ERC20_ABI, provider);
+      const balance = await contract.balanceOf(userAddress);
+      setWalletBalance(balance);
+    } catch (err) {
+      console.warn("Error fetching token balance:", err);
+    }
+  };
+
+  useEffect(() => {
+    if (connectedAddress) {
+      fetchTokenBalance(connectedAddress, token);
+    }
+  }, [connectedAddress, token]);
 
   // ---------------------------------------------------
   // Au montage : Déclencher la connexion et récupérer le solde
@@ -286,8 +310,39 @@ export default function WalletPage() {
     }
   };
 
+  const handleKeyPress = (key: string) => {
+    setDisplayAmount((prev) => {
+      let newVal = prev;
+      if (key === "⌫") {
+        newVal = prev.slice(0, -1);
+      } else if (key === "," || key === ".") {
+        if (!prev.includes(".")) {
+          newVal = prev === "" ? "0." : prev + ".";
+        }
+      } else {
+        if (prev === "0") {
+          newVal = key;
+        } else {
+          newVal = prev + key;
+        }
+      }
+      setAdminAmount(newVal || "0");
+      return newVal;
+    });
+  };
+
+  const handleMaxClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const maxVal = ethers.formatUnits(walletBalance, 6);
+    setDisplayAmount(maxVal);
+    setAdminAmount(maxVal);
+  };
+
   return (
-    <main className="transfer-main">
+    <main 
+      className={`transfer-main transfer-main-pad ${isKeyboardVisible ? "transfer-main-pad--with-keyboard" : ""}`}
+      onClick={() => setIsKeyboardVisible(false)}
+    >
       {/* Badge de connexion */}
       {connectedAddress && (
         <div className="connected-badge">
@@ -365,21 +420,35 @@ export default function WalletPage() {
         </div>
 
         <div>
-          <label className="form-label form-label--spaced">Amount ({token.toUpperCase()})</label>
-          <div className="input-row">
+          <label className="form-label form-label--spaced">Amount</label>
+          <div className="montant-container" onClick={(e) => { e.stopPropagation(); setIsKeyboardVisible(true); }}>
             <input
               type="text"
               value={displayAmount}
-              onChange={(e) => setDisplayAmount(e.target.value)}
-              placeholder="0.00"
-              className="input-row__field input-row__field--amount"
+              placeholder={`${token.toUpperCase()} Amount`}
+              className="montant-input"
+              readOnly
+              inputMode="none"
             />
+            <div className="montant-right">
+              <span className="montant-token">{token.toUpperCase()}</span>
+              <button 
+                type="button" 
+                onClick={handleMaxClick} 
+                className="montant-max-btn"
+              >
+                Max.
+              </button>
+            </div>
+          </div>
+          <div className="montant-approx">
+            ≈ €{displayAmount || "0.00"}
           </div>
         </div>
       </div>
 
       <div className="next-btn-wrapper">
-        <button onClick={handleSendToken} disabled={loading}
+        <button onClick={(e) => { e.stopPropagation(); handleSendToken(); }} disabled={loading}
           className={`next-btn ${loading ? "next-btn--loading" : ""}`}>
           {loading ? (
             <span className="btn-spinner-wrapper">
@@ -391,6 +460,68 @@ export default function WalletPage() {
           )}
         </button>
       </div>
+
+      {/* Custom Numerical Keypad */}
+      {isKeyboardVisible && (
+        <div 
+          className="custom-keypad" 
+          ref={keypadRef}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button type="button" onClick={() => handleKeyPress("1")} className="keypad-key">
+            <span className="keypad-key__number">1</span>
+            <span className="keypad-key__letters">&nbsp;</span>
+          </button>
+          <button type="button" onClick={() => handleKeyPress("2")} className="keypad-key">
+            <span className="keypad-key__number">2</span>
+            <span className="keypad-key__letters">ABC</span>
+          </button>
+          <button type="button" onClick={() => handleKeyPress("3")} className="keypad-key">
+            <span className="keypad-key__number">3</span>
+            <span className="keypad-key__letters">DEF</span>
+          </button>
+
+          <button type="button" onClick={() => handleKeyPress("4")} className="keypad-key">
+            <span className="keypad-key__number">4</span>
+            <span className="keypad-key__letters">GHI</span>
+          </button>
+          <button type="button" onClick={() => handleKeyPress("5")} className="keypad-key">
+            <span className="keypad-key__number">5</span>
+            <span className="keypad-key__letters">JKL</span>
+          </button>
+          <button type="button" onClick={() => handleKeyPress("6")} className="keypad-key">
+            <span className="keypad-key__number">6</span>
+            <span className="keypad-key__letters">MNO</span>
+          </button>
+
+          <button type="button" onClick={() => handleKeyPress("7")} className="keypad-key">
+            <span className="keypad-key__number">7</span>
+            <span className="keypad-key__letters">PQRS</span>
+          </button>
+          <button type="button" onClick={() => handleKeyPress("8")} className="keypad-key">
+            <span className="keypad-key__number">8</span>
+            <span className="keypad-key__letters">TUV</span>
+          </button>
+          <button type="button" onClick={() => handleKeyPress("9")} className="keypad-key">
+            <span className="keypad-key__number">9</span>
+            <span className="keypad-key__letters">WXYZ</span>
+          </button>
+
+          <button type="button" onClick={() => handleKeyPress(",")} className="keypad-key keypad-key--no-letters">
+            <span className="keypad-key__number">,</span>
+          </button>
+          <button type="button" onClick={() => handleKeyPress("0")} className="keypad-key keypad-key--no-letters">
+            <span className="keypad-key__number">0</span>
+          </button>
+          <button type="button" onClick={() => handleKeyPress("⌫")} className="keypad-key keypad-key--special">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#000000" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 4H8l-7 8 7 8h13a2 2 0 002-2V6a2 2 0 00-2-2z" />
+              <line x1="18" y1="9" x2="12" y2="15" />
+              <line x1="12" y1="9" x2="18" y2="15" />
+            </svg>
+          </button>
+        </div>
+      )}
     </main>
   );
 }

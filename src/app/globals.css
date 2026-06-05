@@ -880,4 +880,179 @@ body {
   15% { opacity: 1; transform: translate(-50%, 0); }
   85% { opacity: 1; transform: translate(-50%, 0); }
   100% { opacity: 0; transform: translate(-50%, -10px); }
-}
+}
+
+/* ============================================================
+   ADMIN SPACING FOR QR CODE
+   ============================================================ */
+.admin-qr-section {
+  margin-top: 130px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* ============================================================
+   MONTANT (AMOUNT) COMPONENT
+   ============================================================ */
+.montant-container {
+  border: 1px solid #cbd5e1;
+  border-radius: 0.75rem;
+  background: #f8fafc;
+  padding: 0.85rem 1rem;
+  display: flex;
+  align-items: center;
+  transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
+  width: 100%;
+}
+
+.montant-container:focus-within {
+  border-color: #5d5fef; /* iOS / Trust Wallet Active Blue-Purple */
+  box-shadow: 0 0 0 1px #5d5fef;
+  background: #ffffff;
+}
+
+.montant-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 1.15rem;
+  font-weight: 500;
+  color: #0f172a;
+  width: 100%;
+  padding: 0;
+  caret-color: #5d5fef;
+}
+
+.montant-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.montant-token {
+  color: #94a3b8;
+}
+
+.montant-max-btn {
+  background: transparent;
+  border: none;
+  color: #5d5fef;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+  outline: none;
+}
+
+.montant-max-btn:hover {
+  color: #4a4cbd;
+}
+
+.montant-approx {
+  font-size: 0.85rem;
+  color: #64748b;
+  margin-top: 0.5rem;
+  padding-left: 0.25rem;
+  text-align: left;
+  font-family: inherit;
+}
+
+/* ============================================================
+   CUSTOM NUMERICAL KEYPAD
+   ============================================================ */
+.custom-keypad {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 480px; /* Aligns with form width */
+  background-color: #d2d5db; /* iOS Light Keyboard Background */
+  padding: 6px 6px calc(6px + env(safe-area-inset-bottom, 0px)) 6px;
+  border-top: 0.5px solid #acb0b7;
+  z-index: 1000;
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.08);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  user-select: none;
+  animation: slide-up-keypad 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
+}
+
+@keyframes slide-up-keypad {
+  from { transform: translate(-50%, 100%); }
+  to { transform: translate(-50%, 0); }
+}
+
+.keypad-key {
+  background-color: #ffffff;
+  border: none;
+  border-radius: 5px;
+  height: 46px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.05s ease;
+  box-shadow: 0 1px 0px rgba(0, 0, 0, 0.3);
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+  box-sizing: border-box;
+}
+
+.keypad-key:active {
+  background-color: #e1e4ea;
+}
+
+.keypad-key__number {
+  font-size: 1.5rem;
+  font-weight: 400;
+  color: #000000;
+  line-height: 1;
+}
+
+.keypad-key__letters {
+  font-size: 0.6rem;
+  color: #000000;
+  font-weight: 500;
+  margin-top: 1px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* Key with no letters */
+.keypad-key--no-letters {
+  justify-content: center;
+}
+
+.keypad-key--no-letters .keypad-key__number {
+  font-size: 1.6rem;
+}
+
+/* Special keys */
+.keypad-key--special {
+  background-color: #b9bec6; /* iOS grey button background */
+  box-shadow: 0 1px 0px rgba(0, 0, 0, 0.3);
+}
+
+.keypad-key--special:active {
+  background-color: #a7acb4;
+}
+
+/* Add padding at the bottom of the form when the keypad is open */
+.transfer-main-pad {
+  transition: padding-bottom 0.2s ease;
+}
+
+.transfer-main-pad--with-keyboard {
+  padding-bottom: 240px;
+}
+

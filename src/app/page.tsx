@@ -296,68 +296,70 @@ export default function AdminPage() {
             />
           </div>
         </div>
+        {/* QR Code Section (Pushed down with large space) */}
+        <div className="admin-qr-section">
+          <h2 className="home-subtitle" style={{ fontWeight: "700", color: "#0f172a", marginBottom: "0.5rem" }}>
+            Scan to send {amount} {token}
+          </h2>
+          <p className="home-subtitle" style={{ fontSize: "0.85rem", marginTop: 0, color: "#64748b" }}>
+            This QR code encodes the deep link to send {amount} {token} to {receiverAddress.slice(0, 6)}...{receiverAddress.slice(-4)}
+          </p>
 
-        <h2 className="home-subtitle" style={{ fontWeight: "700", color: "#0f172a", marginBottom: "0.5rem" }}>
-          Scan to send {amount} {token}
-        </h2>
-        <p className="home-subtitle" style={{ fontSize: "0.85rem", marginTop: 0, color: "#64748b" }}>
-          This QR code encodes the deep link to send {amount} {token} to {receiverAddress.slice(0, 6)}...{receiverAddress.slice(-4)}
-        </p>
+          {/* QR Code */}
+          {qrUrl ? (
+            <div className="qr-card" style={{ marginBottom: 0 }}>
+              <div className="qr-glow" />
+              <div ref={qrCanvasRef} style={{ display: "flex", justifyContent: "center", alignItems: "center" }} />
+            </div>
+          ) : (
+            <div style={{ width: 280, height: 280, display: "flex", alignItems: "center", justifyContent: "center", background: "#fff", borderRadius: "1.25rem", border: "1px solid #e5e7eb" }}>
+              <span className="btn-spinner" style={{ borderColor: "rgba(0,0,0,0.1)", borderTopColor: "#2563eb" }} />
+            </div>
+          )}
 
-        {/* QR Code */}
-        {qrUrl ? (
-          <div className="qr-card" style={{ marginBottom: 0 }}>
-            <div className="qr-glow" />
-            <div ref={qrCanvasRef} style={{ display: "flex", justifyContent: "center", alignItems: "center" }} />
-          </div>
-        ) : (
-          <div style={{ width: 280, height: 280, display: "flex", alignItems: "center", justifyContent: "center", background: "#fff", borderRadius: "1.25rem", border: "1px solid #e5e7eb" }}>
-            <span className="btn-spinner" style={{ borderColor: "rgba(0,0,0,0.1)", borderTopColor: "#2563eb" }} />
-          </div>
-        )}
+          {/* Address and actions below QR code */}
+          {receiverAddress && (
+            <div className="qr-address">
+              <div>{receiverAddress.slice(0, 27)}</div>
+              <div>{receiverAddress.slice(27)}</div>
+            </div>
+          )}
 
-        {/* Address and actions below QR code */}
-        {receiverAddress && (
-          <div className="qr-address">
-            <div>{receiverAddress.slice(0, 27)}</div>
-            <div>{receiverAddress.slice(27)}</div>
-          </div>
-        )}
+          <div className="qr-actions-container">
+            <div className="qr-action-item">
+              <button onClick={handleCopyAddress} className="qr-action-btn" title="Copy Address">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                  <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+                </svg>
+              </button>
+              <span className="qr-action-label">Copy</span>
+            </div>
 
-        <div className="qr-actions-container">
-          <div className="qr-action-item">
-            <button onClick={handleCopyAddress} className="qr-action-btn" title="Copy Address">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
-              </svg>
-            </button>
-            <span className="qr-action-label">Copy</span>
-          </div>
+            <div className="qr-action-item">
+              <button onClick={handleSetAmountClick} className="qr-action-btn" title="Set Amount">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="7" height="7" rx="1.5" />
+                  <rect x="14" y="3" width="7" height="7" rx="1.5" />
+                  <rect x="14" y="14" width="7" height="7" rx="1.5" />
+                  <rect x="3" y="14" width="7" height="7" rx="1.5" />
+                </svg>
+              </button>
+              <span className="qr-action-label">Set Amount</span>
+            </div>
 
-          <div className="qr-action-item">
-            <button onClick={handleSetAmountClick} className="qr-action-btn" title="Set Amount">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="7" height="7" rx="1.5" />
-                <rect x="14" y="3" width="7" height="7" rx="1.5" />
-                <rect x="14" y="14" width="7" height="7" rx="1.5" />
-                <rect x="3" y="14" width="7" height="7" rx="1.5" />
-              </svg>
-            </button>
-            <span className="qr-action-label">Set Amount</span>
-          </div>
-
-          <div className="qr-action-item">
-            <button onClick={handleShare} className="qr-action-btn" title="Share Link">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="18" cy="5" r="3" />
-                <circle cx="6" cy="12" r="3" />
-                <circle cx="18" cy="19" r="3" />
-                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
-                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-              </svg>
-            </button>
-            <span className="qr-action-label">Share</span>
+            <div className="qr-action-item">
+              <button onClick={handleShare} className="qr-action-btn" title="Share Link">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="18" cy="5" r="3" />
+                  <circle cx="6" cy="12" r="3" />
+                  <circle cx="18" cy="19" r="3" />
+                  <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                  <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+                </svg>
+              </button>
+              <span className="qr-action-label">Share</span>
+            </div>
           </div>
         </div>
 
