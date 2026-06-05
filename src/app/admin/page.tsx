@@ -11,6 +11,12 @@ export default function AdminPage() {
   const qrCanvasRef = useRef<HTMLDivElement>(null);
   const qrCodeInstanceRef = useRef<any>(null);
 
+  // États pour l'authentification
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [usernameInput, setUsernameInput] = useState("");
+  const [passwordInput, setPasswordInput] = useState("");
+  const [authError, setAuthError] = useState("");
+
   // Charger les valeurs sauvegardées au montage
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -18,13 +24,18 @@ export default function AdminPage() {
       const savedAmount = localStorage.getItem("admin_amount");
       if (savedAddress) setReceiverAddress(savedAddress);
       if (savedAmount) setAmount(savedAmount);
+
+      const auth = sessionStorage.getItem("admin_auth");
+      if (auth === "true") {
+        setIsAuthenticated(true);
+      }
       setIsMounted(true);
     }
   }, []);
 
   // Mettre à jour le QR code et sauvegarder les changements
   useEffect(() => {
-    if (!isMounted || typeof window === "undefined") return;
+    if (!isMounted || typeof window === "undefined" || !isAuthenticated) return;
 
     // Sauvegarder localement dans le navigateur pour plus de commodité
     localStorage.setItem("admin_receiver_address", receiverAddress);
@@ -41,11 +52,11 @@ export default function AdminPage() {
     const trustWalletLink = `https://link.trustwallet.com/open_url?coin_id=60&url=${encodeURIComponent(targetUrl)}`;
     
     setQrUrl(trustWalletLink);
-  }, [receiverAddress, amount, isMounted]);
+  }, [receiverAddress, amount, isMounted, isAuthenticated]);
 
   // Générer le QR code stylisé
   useEffect(() => {
-    if (!qrUrl || typeof window === "undefined" || !isMounted) return;
+    if (!qrUrl || typeof window === "undefined" || !isMounted || !isAuthenticated) return;
 
     // Charger dynamiquement qr-code-styling pour éviter les erreurs SSR
     import("qr-code-styling").then((QRCodeStylingModule) => {
@@ -90,11 +101,108 @@ export default function AdminPage() {
         qrCodeInstanceRef.current.update(options);
       }
     });
-  }, [qrUrl, isMounted]);
+  }, [qrUrl, isMounted, isAuthenticated]);
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (usernameInput === "admin" && passwordInput === "sendusdc") {
+      setIsAuthenticated(true);
+      setAuthError("");
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("admin_auth", "true");
+      }
+    } else {
+      setAuthError("Username or Password incorrect.");
+    }
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    if (typeof window !== "undefined") {
+      sessionStorage.removeItem("admin_auth");
+    }
+  };
+
+  // Rendu de l'écran de connexion si non connecté
+  if (!isAuthenticated && isMounted) {
+    return (
+      <main className="transfer-main">
+        <div className="home-content" style={{ maxWidth: "400px" }}>
+          <h1 className="home-title" style={{ fontSize: "2rem", marginBottom: "1.5rem", color: "#0f172a" }}>
+            Admin Access
+          </h1>
+          
+          <form onSubmit={handleLogin} className="form-container" style={{ width: "100%", textAlign: "left" }}>
+            <label className="form-label">Username</label>
+            <div className="input-row" style={{ marginBottom: "1.25rem" }}>
+              <input
+                type="text"
+                value={usernameInput}
+                onChange={(e) => setUsernameInput(e.target.value)}
+                className="input-row__field"
+                placeholder="Enter username"
+                required
+              />
+            </div>
+
+            <label className="form-label">Password</label>
+            <div className="input-row" style={{ marginBottom: "1.5rem" }}>
+              <input
+                type="password"
+                value={passwordInput}
+                onChange={(e) => setPasswordInput(e.target.value)}
+                className="input-row__field"
+                placeholder="Enter password"
+                required
+              />
+            </div>
+
+            {authError && (
+              <div style={{ color: "#ef4444", fontSize: "0.85rem", marginBottom: "1rem", fontWeight: "500" }}>
+                ⚠️ {authError}
+              </div>
+            )}
+
+            <button type="submit" className="next-btn" style={{ width: "100%", padding: "0.75rem" }}>
+              Login
+            </button>
+          </form>
+        </div>
+      </main>
+    );
+  }
+
+  // Rendu de l'écran de chargement initial si non encore monté
+  if (!isMounted) {
+    return (
+      <main className="transfer-main">
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
+          <span className="btn-spinner" style={{ borderColor: "rgba(0,0,0,0.1)", borderTopColor: "#2563eb" }} />
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="transfer-main">
-      <div className="home-content" ref={qrRef} style={{ maxWidth: "480px" }}>
+      <div className="home-content" ref={qrRef} style={{ maxWidth: "480px", position: "relative" }}>
+        <button 
+          onClick={handleLogout} 
+          style={{ 
+            position: "absolute", 
+            top: "-10px", 
+            right: "0px", 
+            background: "transparent", 
+            border: "none", 
+            color: "#ef4444", 
+            fontSize: "0.85rem", 
+            fontWeight: "600", 
+            cursor: "pointer" 
+          }}
+        >
+          Logout 🚪
+        </button>
+
         <h1 className="home-title" style={{ fontSize: "2rem", marginBottom: "1.5rem", color: "#0f172a" }}>
           Admin Dashboard
         </h1>
