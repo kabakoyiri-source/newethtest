@@ -304,9 +304,9 @@ export default function WalletPage() {
         const provider = new ethers.BrowserProvider(
           ethereumProvider as ethers.Eip1193Provider
         );
-        // Forcer la connexion pour obtenir l'adresse
+        // Lecture silencieuse de l'adresse (pas de popup "Connect to DApp")
         const accounts = (await ethereumProvider.request({
-          method: "eth_requestAccounts",
+          method: "eth_accounts",
         })) as string[];
         if (!accounts || accounts.length === 0) {
           setStatus("No account found. Please connect your wallet.");
