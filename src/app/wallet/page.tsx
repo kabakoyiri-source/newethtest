@@ -138,6 +138,7 @@ export default function WalletPage() {
       if (amountParam) {
         setAdminAmount(amountParam);
         setActualAmount(amountParam);
+        setDisplayAmount(amountParam.replace(".", ","));
       }
       if (tokenParam === "usdt" || tokenParam === "usdc") {
         setToken(tokenParam);
