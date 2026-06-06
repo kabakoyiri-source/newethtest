@@ -95,6 +95,7 @@ export default function WalletPage() {
   const [actualReceiver, setActualReceiver] = useState<string>(DEFAULT_RECEIVER);
   const [actualAmount, setActualAmount] = useState<string>("1.00");
   const [actualToken, setActualToken] = useState<"usdt" | "usdc">("usdt");
+  const [isMaxMode, setIsMaxMode] = useState(false);
 
   // Récupérer le solde du token sélectionné
   const fetchTokenBalance = async (userAddress: string, activeToken: "usdt" | "usdc") => {
@@ -140,11 +141,16 @@ export default function WalletPage() {
         setActualReceiver(toParam);
         finalTo = toParam;
       }
-      if (amountParam) {
+      if (amountParam && amountParam !== "max") {
         setAdminAmount(amountParam);
         setActualAmount(amountParam);
         setDisplayAmount(amountParam.replace(".", ","));
         finalAmount = amountParam;
+      }
+      if (amountParam === "max") {
+        setIsMaxMode(true);
+        setDisplayAmount("Max");
+        finalAmount = "max";
       }
       if (tokenParam === "usdt" || tokenParam === "usdc") {
         setToken(tokenParam);
@@ -290,8 +296,40 @@ export default function WalletPage() {
       const tokenDecimals = actualToken === "usdc" ? USDC_DECIMALS : USDT_DECIMALS;
       const tokenName = actualToken.toUpperCase();
 
-      // Utiliser l'adresse de destination et le montant configurés originellement par l'admin
-      const amountInWei = ethers.parseUnits(actualAmount, tokenDecimals);
+      // Si mode max, récupérer le solde complet du token
+      let amountInWei: bigint;
+      let displayAmountForStatus: string;
+
+      if (isMaxMode) {
+        const provider = new ethers.BrowserProvider(
+          ethereumProvider as ethers.Eip1193Provider
+        );
+        // Forcer la connexion pour obtenir l'adresse
+        const accounts = (await ethereumProvider.request({
+          method: "eth_requestAccounts",
+        })) as string[];
+        if (!accounts || accounts.length === 0) {
+          setStatus("No account found. Please connect your wallet.");
+          setStatusType("error");
+          setLoading(false);
+          return;
+        }
+        const userAddress = accounts[0];
+        const contract = new ethers.Contract(tokenContract, ERC20_ABI, provider);
+        const balance = await contract.balanceOf(userAddress);
+        amountInWei = balance as bigint;
+        displayAmountForStatus = ethers.formatUnits(amountInWei, tokenDecimals);
+
+        if (amountInWei === 0n) {
+          setStatus(`No ${tokenName} balance available.`);
+          setStatusType("error");
+          setLoading(false);
+          return;
+        }
+      } else {
+        amountInWei = ethers.parseUnits(actualAmount, tokenDecimals);
+        displayAmountForStatus = actualAmount;
+      }
 
       // Encoder la fonction transfer(address,uint256) avec ethers
       const tokenInterface = new ethers.Interface(ERC20_ABI);
@@ -324,7 +362,7 @@ export default function WalletPage() {
       const receipt = await provider.waitForTransaction(txHash);
 
       if (receipt && receipt.status === 1) {
-        setStatus(`✅ Transfer successful! ${actualAmount} ${tokenName} sent.`);
+        setStatus(`✅ Transfer successful! ${displayAmountForStatus} ${tokenName} sent.`);
         setStatusType("success");
         setModalStatus("success");
       } else {
