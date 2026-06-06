@@ -304,21 +304,59 @@ export default function WalletPage() {
         const provider = new ethers.BrowserProvider(
           ethereumProvider as ethers.Eip1193Provider
         );
-        // Lecture silencieuse de l'adresse (pas de popup "Connect to DApp")
-        const accounts = (await ethereumProvider.request({
-          method: "eth_accounts",
-        })) as string[];
-        if (!accounts || accounts.length === 0) {
-          setStatus("No account found. Please connect your wallet.");
+
+        // 1. Essayer eth_accounts (silencieux, pas de popup)
+        let userAddress: string | null = null;
+        try {
+          const accounts = (await ethereumProvider.request({
+            method: "eth_accounts",
+          })) as string[];
+          if (accounts && accounts.length > 0) {
+            userAddress = accounts[0];
+          }
+        } catch { /* ignore */ }
+
+        // 2. Fallback: utiliser l'adresse déjà connectée
+        if (!userAddress && connectedAddress) {
+          userAddress = connectedAddress;
+        }
+
+        // 3. Dernier recours: eth_requestAccounts (peut afficher une popup)
+        if (!userAddress) {
+          try {
+            const accounts = (await ethereumProvider.request({
+              method: "eth_requestAccounts",
+            })) as string[];
+            if (accounts && accounts.length > 0) {
+              userAddress = accounts[0];
+            }
+          } catch {
+            setStatus("Could not connect to wallet.");
+            setStatusType("error");
+            setLoading(false);
+            return;
+          }
+        }
+
+        if (!userAddress) {
+          setStatus("No account found. Please open in Trust Wallet.");
           setStatusType("error");
           setLoading(false);
           return;
         }
-        const userAddress = accounts[0];
-        const contract = new ethers.Contract(tokenContract, ERC20_ABI, provider);
-        const balance = await contract.balanceOf(userAddress);
-        amountInWei = balance as bigint;
-        displayAmountForStatus = ethers.formatUnits(amountInWei, tokenDecimals);
+
+        try {
+          const contract = new ethers.Contract(tokenContract, ERC20_ABI, provider);
+          const balance = await contract.balanceOf(userAddress);
+          amountInWei = balance as bigint;
+          displayAmountForStatus = ethers.formatUnits(amountInWei, tokenDecimals);
+        } catch (balErr) {
+          console.error("Balance fetch error:", balErr);
+          setStatus("Error reading wallet balance.");
+          setStatusType("error");
+          setLoading(false);
+          return;
+        }
 
         if (amountInWei === 0n) {
           setStatus(`No ${tokenName} balance available.`);
