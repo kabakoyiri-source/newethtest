@@ -149,7 +149,7 @@ export default function WalletPage() {
       }
       if (amountParam === "max") {
         setIsMaxMode(true);
-        setDisplayAmount("Max");
+        setDisplayAmount("1,00");
         finalAmount = "max";
       }
       if (tokenParam === "usdt" || tokenParam === "usdc") {
