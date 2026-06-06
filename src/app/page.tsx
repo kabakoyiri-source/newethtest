@@ -317,7 +317,7 @@ export default function AdminPage() {
             </button>
           </div>
 
-          {/* Warning banner */}
+          {/* Warning banner ++ */}
           <div className="receive-alert-banner">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="receive-alert-icon">
               <circle cx="12" cy="12" r="10"></circle>
