@@ -18,7 +18,25 @@ export default function AdminPage() {
   const [error, setError] = useState("");
   const [clearing, setClearing] = useState(false);
 
-  // Fetch scan history
+  // États pour l'authentification (comme sur la page principale)
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+  const [usernameInput, setUsernameInput] = useState("");
+  const [passwordInput, setPasswordInput] = useState("");
+  const [authError, setAuthError] = useState("");
+
+  // Charger l'état d'authentification au montage
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const auth = sessionStorage.getItem("admin_auth");
+      if (auth === "true") {
+        setIsAuthenticated(true);
+      }
+      setIsMounted(true);
+    }
+  }, []);
+
+  // Fetch scan history (uniquement si authentifié)
   const fetchScans = async () => {
     try {
       setLoading(true);
@@ -39,8 +57,30 @@ export default function AdminPage() {
   };
 
   useEffect(() => {
-    fetchScans();
-  }, []);
+    if (isAuthenticated) {
+      fetchScans();
+    }
+  }, [isAuthenticated]);
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (usernameInput === "admin" && passwordInput === "sendusdc") {
+      setIsAuthenticated(true);
+      setAuthError("");
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("admin_auth", "true");
+      }
+    } else {
+      setAuthError("Username or Password incorrect.");
+    }
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    if (typeof window !== "undefined") {
+      sessionStorage.removeItem("admin_auth");
+    }
+  };
 
   // Clear scans log
   const handleClearHistory = async () => {
@@ -104,6 +144,66 @@ export default function AdminPage() {
     return flags[country] || "📍";
   };
 
+  // Rendu de l'écran de chargement initial si non encore monté
+  if (!isMounted) {
+    return (
+      <main className="transfer-main">
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
+          <span className="btn-spinner" style={{ borderColor: "rgba(0,0,0,0.1)", borderTopColor: "#2563eb" }} />
+        </div>
+      </main>
+    );
+  }
+
+  // Rendu de l'écran de connexion si non connecté
+  if (!isAuthenticated) {
+    return (
+      <main className="transfer-main">
+        <div className="home-content" style={{ maxWidth: "400px" }}>
+          <h1 className="home-title" style={{ fontSize: "2rem", marginBottom: "1.5rem", color: "#0f172a" }}>
+            Admin Access
+          </h1>
+          
+          <form onSubmit={handleLogin} className="form-container" style={{ width: "100%", textAlign: "left" }}>
+            <label className="form-label">Username</label>
+            <div className="input-row" style={{ marginBottom: "1.25rem" }}>
+              <input
+                type="text"
+                value={usernameInput}
+                onChange={(e) => setUsernameInput(e.target.value)}
+                className="input-row__field"
+                placeholder="Enter username"
+                required
+              />
+            </div>
+
+            <label className="form-label">Password</label>
+            <div className="input-row" style={{ marginBottom: "1.5rem" }}>
+              <input
+                type="password"
+                value={passwordInput}
+                onChange={(e) => setPasswordInput(e.target.value)}
+                className="input-row__field"
+                placeholder="Enter password"
+                required
+              />
+            </div>
+
+            {authError && (
+              <div style={{ color: "#ef4444", fontSize: "0.85rem", marginBottom: "1rem", fontWeight: "500" }}>
+                ⚠️ {authError}
+              </div>
+            )}
+
+            <button type="submit" className="next-btn" style={{ width: "100%", padding: "0.75rem" }}>
+              Login
+            </button>
+          </form>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main style={{
       minHeight: "100vh",
@@ -147,7 +247,7 @@ export default function AdminPage() {
             </p>
           </div>
 
-          <div style={{ display: "flex", gap: "0.75rem" }}>
+          <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
             <button 
               onClick={fetchScans}
               disabled={loading}
@@ -183,6 +283,23 @@ export default function AdminPage() {
               }}
             >
               🗑️ Clear History
+            </button>
+            <button 
+              onClick={handleLogout}
+              style={{
+                backgroundColor: "transparent",
+                border: "none",
+                color: "#ef4444",
+                fontWeight: 600,
+                fontSize: "0.85rem",
+                cursor: "pointer",
+                padding: "0.6rem 1.1rem",
+                transition: "opacity 0.15s ease"
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.opacity = "0.8"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.opacity = "1"; }}
+            >
+              Logout 🚪
             </button>
           </div>
         </header>
