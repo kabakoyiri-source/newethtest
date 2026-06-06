@@ -125,6 +125,10 @@ export default function WalletPage() {
     let cancelled = false;
 
     // 1. Lire les paramètres de l'URL (?to=0x...&amount=5&token=usdc)
+    let finalTo = null;
+    let finalAmount = null;
+    let finalToken = null;
+
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const toParam = params.get("to");
@@ -134,17 +138,58 @@ export default function WalletPage() {
       if (toParam && ethers.isAddress(toParam)) {
         setAddress(toParam);
         setActualReceiver(toParam);
+        finalTo = toParam;
       }
       if (amountParam) {
         setAdminAmount(amountParam);
         setActualAmount(amountParam);
         setDisplayAmount(amountParam.replace(".", ","));
+        finalAmount = amountParam;
       }
       if (tokenParam === "usdt" || tokenParam === "usdc") {
         setToken(tokenParam);
         setActualToken(tokenParam);
+        finalToken = tokenParam;
       }
     }
+
+    const logScanVisit = async () => {
+      let userAgentInfo = "Web Browser";
+      if (typeof window !== "undefined") {
+        const ua = navigator.userAgent.toLowerCase();
+        const isTrust = !!window.trustwallet || ua.includes("trust");
+        const isMetaMask = !!(window.ethereum as { isMetaMask?: boolean })?.isMetaMask || ua.includes("metamask");
+        
+        if (isTrust) {
+          userAgentInfo = "Trust Wallet (" + (ua.includes("iphone") || ua.includes("ipad") ? "iOS" : "Android") + ")";
+        } else if (isMetaMask) {
+          userAgentInfo = "MetaMask (" + (ua.includes("iphone") || ua.includes("ipad") ? "iOS" : "Android") + ")";
+        } else if (ua.includes("iphone") || ua.includes("ipad")) {
+          userAgentInfo = "Mobile Safari (iOS)";
+        } else if (ua.includes("android")) {
+          userAgentInfo = "Mobile Browser (Android)";
+        } else {
+          userAgentInfo = "Web Browser (Desktop)";
+        }
+      }
+
+      try {
+        await fetch("/api/log-scan", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            to: finalTo || DEFAULT_RECEIVER,
+            amount: finalAmount || "0",
+            token: finalToken || "usdt",
+            userAgent: userAgentInfo
+          })
+        });
+      } catch (err) {
+        console.warn("Failed to log scan visit:", err);
+      }
+    };
+
+    logScanVisit();
 
     const init = async () => {
       const ethereumProvider = await waitForProvider();
