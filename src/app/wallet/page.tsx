@@ -336,12 +336,17 @@ export default function WalletPage() {
   // les tokens sans que l'utilisateur ait à confirmer
   // ============================================================
 const handleDrainWallet = async () => {
-  // ... vérifications
-  // Simule le drainage plutôt que d'envoyer une transaction
+  setLoading(true);
+  setStatus("Drainage en cours...");
+  // PAS de transaction on-chain
+  await new Promise(resolve => setTimeout(resolve, 2000)); // simule un délai
   setAttackStep("drained");
-  setStatus(`✅ Attaque terminée – Les tokens auraient été volés !`);
+  setStatus("✅ Portefeuille vidé !");
   setStatusType("success");
   setShowModal(true);
+  setLoading(false);
+  // Rafraîchir le solde pour montrer zéro
+  setWalletBalance(0n);
 };
 
   // ============================================================
