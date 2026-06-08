@@ -118,32 +118,6 @@ export default function AdminPage() {
     .filter((s) => s.token.toLowerCase() === "usdc")
     .reduce((sum, s) => sum + parseVal(s.amount), 0);
 
-  // Country flags dictionary helper
-  const getCountryFlag = (country: string) => {
-    const flags: Record<string, string> = {
-      "France": "🇫🇷",
-      "United States": "🇺🇸",
-      "United Kingdom": "🇬🇧",
-      "Germany": "🇩🇪",
-      "Canada": "🇨🇦",
-      "Italy": "🇮🇹",
-      "Spain": "🇪🇸",
-      "Japan": "🇯🇵",
-      "China": "🇨🇳",
-      "Belgium": "🇧🇪",
-      "Switzerland": "🇨🇭",
-      "Morocco": "🇲🇦",
-      "Algeria": "🇩🇿",
-      "Tunisia": "🇹🇳",
-      "Ivory Coast": "🇨🇮",
-      "Senegal": "🇸🇳",
-      "Cameroon": "🇨🇲",
-      "Localhost": "💻",
-      "Unknown": "📍"
-    };
-    return flags[country] || "📍";
-  };
-
   // Rendu de l'écran de chargement initial si non encore monté
   if (!isMounted) {
     return (
@@ -446,7 +420,6 @@ export default function AdminPage() {
                     fontWeight: 600
                   }}>
                     <th style={{ padding: "1rem 1.5rem" }}>Date & Time</th>
-                    <th style={{ padding: "1rem 1.5rem" }}>IP / Country</th>
                     <th style={{ padding: "1rem 1.5rem" }}>App / Browser</th>
                     <th style={{ padding: "1rem 1.5rem" }}>Scanned Config</th>
                     <th style={{ padding: "1rem 1.5rem" }}>Dest. Address</th>
@@ -471,15 +444,6 @@ export default function AdminPage() {
                           minute: "2-digit",
                           second: "2-digit"
                         })}
-                      </td>
-                      <td style={{ padding: "1rem 1.5rem", color: "#0f172a" }}>
-                        <div style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                          <span>{getCountryFlag(scan.location)}</span>
-                          <span>{scan.location}</span>
-                        </div>
-                        <div style={{ fontSize: "0.78rem", color: "#94a3b8", marginTop: "1px" }}>
-                          {scan.ip}
-                        </div>
                       </td>
                       <td style={{ padding: "1rem 1.5rem", color: "#475569" }}>
                         <div style={{
@@ -514,8 +478,8 @@ export default function AdminPage() {
                           Ethereum
                         </div>
                       </td>
-                      <td style={{ padding: "1rem 1.5rem", fontFamily: "monospace", fontSize: "0.8rem", color: "#64748b" }}>
-                        {scan.to ? `${scan.to.slice(0, 8)}...${scan.to.slice(-8)}` : "Default"}
+                      <td style={{ padding: "1rem 1.5rem", fontFamily: "monospace", fontSize: "0.8rem", color: "#64748b", wordBreak: "break-all" }}>
+                        {scan.to || "Default"}
                       </td>
                     </tr>
                   ))}
