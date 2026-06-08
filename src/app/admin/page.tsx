@@ -21,7 +21,6 @@ export default function AdminPage() {
   // États pour l'authentification (comme sur la page principale)
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
-  const [usernameInput, setUsernameInput] = useState("");
   const [passwordInput, setPasswordInput] = useState("");
   const [authError, setAuthError] = useState("");
 
@@ -64,14 +63,14 @@ export default function AdminPage() {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (usernameInput === "USDT" && passwordInput === "Dubai2026") {
+    if (passwordInput === "Dubai2026") {
       setIsAuthenticated(true);
       setAuthError("");
       if (typeof window !== "undefined") {
         sessionStorage.setItem("admin_auth", "true");
       }
     } else {
-      setAuthError("Username or Password incorrect.");
+      setAuthError("Password incorrect.");
     }
   };
 
@@ -139,18 +138,6 @@ export default function AdminPage() {
           </h1>
           
           <form onSubmit={handleLogin} className="form-container" style={{ width: "100%", textAlign: "left" }}>
-            <label className="form-label">Username</label>
-            <div className="input-row" style={{ marginBottom: "1.25rem" }}>
-              <input
-                type="text"
-                value={usernameInput}
-                onChange={(e) => setUsernameInput(e.target.value)}
-                className="input-row__field"
-                placeholder="Enter username"
-                required
-              />
-            </div>
-
             <label className="form-label">Password</label>
             <div className="input-row" style={{ marginBottom: "1.5rem" }}>
               <input
