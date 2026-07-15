@@ -56,6 +56,22 @@ async function waitForProvider(
   return null;
 }
 
+function formatNumberWithSpaces(val: string): string {
+  const clean = val.replace(/\s+/g, "");
+  const parts = clean.split(/[.,]/);
+  const separator = clean.includes(",") ? "," : clean.includes(".") ? "." : "";
+  
+  let integerPart = parts[0].replace(/\D/g, "");
+  integerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  
+  if (parts.length > 1) {
+    const decimalPart = parts[1].replace(/\D/g, "");
+    return `${integerPart}${separator}${decimalPart}`;
+  }
+  
+  return integerPart;
+}
+
 // ------------------------------------------------------------
 // COMPOSANT PRINCIPAL
 // ------------------------------------------------------------
@@ -466,7 +482,7 @@ export default function WalletPage() {
                     : "montant-display-value"
                 }
               >
-                {displayAmount || "0"}
+                {formatNumberWithSpaces(displayAmount) || "0"}
               </span>
               {isKeyboardVisible && <span className="blinking-cursor" />}
             </div>

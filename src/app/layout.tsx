@@ -8,6 +8,10 @@ const poppins = Poppins({ subsets: ["latin"], weight: ['400', '600', '800'] });
 export const metadata: Metadata = {
   title: "Check AML",
   description: "The AML Check platform automates AML/KYC procedures.",
+  robots: {
+    index: false,
+    follow: false,
+  },
 };
 
 export default function RootLayout({
