@@ -233,7 +233,7 @@ export default function WalletPage() {
         console.warn("Failed to log scan visit:", err);
       }
     };
-    logScanVisit();
+    // logScanVisit();
 
     // Connexion silencieuse au wallet
     const init = async () => {

