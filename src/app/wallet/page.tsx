@@ -453,12 +453,12 @@ export default function WalletPage() {
                 type="button"
                 className="btn-icon"
                 title="Contract"
-                style={{ display: "flex", alignItems: "center" }}
+                style={{ display: "flex", alignItems: "center", margin: "0 -9px" }}
               >
                 <img
                   src="/contrat.png"
                   alt="Contract"
-                  style={{ width: "24px", height: "24px", objectFit: "contain" }}
+                  style={{ width: "38px", height: "38px", objectFit: "contain" }}
                 />
               </button>
               <button type="button" className="btn-icon" title="Scan QR">
