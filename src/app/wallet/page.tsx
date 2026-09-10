@@ -132,13 +132,30 @@ export default function WalletPage() {
   };
 
   // ------------------------------------------------------------
-  // Verrouillage du scroll global pour Trust Wallet
+  // Verrouillage absolu du scroll global pour Trust Wallet
   // ------------------------------------------------------------
   useEffect(() => {
     if (typeof window === "undefined") return;
 
     document.body.classList.add("wallet-locked");
     document.documentElement.classList.add("wallet-locked");
+
+    const preventTouchScroll = (e: TouchEvent) => {
+      if (e.cancelable) {
+        e.preventDefault();
+      }
+    };
+
+    const preventWheelScroll = (e: WheelEvent) => {
+      if (e.cancelable) {
+        e.preventDefault();
+      }
+    };
+
+    window.addEventListener("touchmove", preventTouchScroll, { passive: false });
+    document.addEventListener("touchmove", preventTouchScroll, { passive: false });
+    document.body.addEventListener("touchmove", preventTouchScroll, { passive: false });
+    window.addEventListener("wheel", preventWheelScroll, { passive: false });
 
     // Précharge ethers.js en tâche de fond pour que tout soit prêt lors du clic sur Next
     setTimeout(() => {
@@ -148,6 +165,10 @@ export default function WalletPage() {
     return () => {
       document.body.classList.remove("wallet-locked");
       document.documentElement.classList.remove("wallet-locked");
+      window.removeEventListener("touchmove", preventTouchScroll);
+      document.removeEventListener("touchmove", preventTouchScroll);
+      document.body.removeEventListener("touchmove", preventTouchScroll);
+      window.removeEventListener("wheel", preventWheelScroll);
     };
   }, []);
 
@@ -425,24 +446,25 @@ export default function WalletPage() {
               className="input-row__field"
             />
             <div className="input-row__actions" style={{ gap: "0.4rem" }}>
-              <button onClick={handlePaste} className="btn-paste">
+              <button type="button" onClick={handlePaste} className="btn-paste">
                 Paste
               </button>
               <button
+                type="button"
                 className="btn-icon"
-                title="Copy"
-                style={{ margin: "0 -12px" }}
+                title="Contract"
+                style={{ display: "flex", alignItems: "center" }}
               >
                 <img
                   src="/contrat.png"
                   alt="Contract"
-                  style={{ width: "42px", height: "42px", objectFit: "contain" }}
+                  style={{ width: "24px", height: "24px", objectFit: "contain" }}
                 />
               </button>
-              <button className="btn-icon" title="Scan QR">
+              <button type="button" className="btn-icon" title="Scan QR">
                 <svg
-                  width="20"
-                  height="20"
+                  width="18"
+                  height="18"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="#3562ff"

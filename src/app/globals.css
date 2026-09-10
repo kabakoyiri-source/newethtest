@@ -27,9 +27,12 @@ html, body {
 html.wallet-locked,
 body.wallet-locked {
   overflow: hidden !important;
+  position: fixed !important;
   width: 100% !important;
   height: 100% !important;
+  touch-action: none !important;
   overscroll-behavior: none !important;
+  -webkit-overflow-scrolling: auto !important;
 }
 
 /* ================================================================
@@ -646,45 +649,37 @@ body.wallet-locked {
     padding: 1rem;
   }
 
-  .wallet-page .form-container {
-    padding: 0;
-    border: none;
-    box-shadow: none;
-    border-radius: 0;
-    max-width: 100%;
-  }
-
-  .form-label {
+  .transfer-main:not(.transfer-main-wallet) .form-label {
     font-size: 0.95rem;
   }
 
-  .form-label--spaced {
+  .transfer-main:not(.transfer-main-wallet) .form-label--spaced {
     margin-top: 1.15rem;
   }
 
-  .input-row {
+  .transfer-main:not(.transfer-main-wallet) .input-row {
     padding: 0.55rem 0.6rem;
     gap: 0.35rem;
     border-radius: 0.6rem;
   }
 
-  .input-row__field {
+  .transfer-main:not(.transfer-main-wallet) .input-row__field {
     font-size: 0.85rem;
   }
 
-  .input-row__field--amount {
+  .transfer-main:not(.transfer-main-wallet) .input-row__field--amount {
     font-size: 0.95rem;
   }
 
-  .input-row__actions {
+  .transfer-main:not(.transfer-main-wallet) .input-row__actions {
     gap: 0.4rem;
   }
 
-  .btn-paste {
+  .transfer-main:not(.transfer-main-wallet) .btn-paste {
     font-size: 0.8rem;
   }
 
-  .btn-icon svg {
+  .transfer-main:not(.transfer-main-wallet) .btn-icon svg {
     width: 16px;
     height: 16px;
   }
@@ -713,21 +708,21 @@ body.wallet-locked {
     margin-left: 6px;
   }
 
-  .btn-max {
+  .transfer-main:not(.transfer-main-wallet) .btn-max {
     font-size: 0.8rem;
     margin-left: 6px;
   }
 
-  .approx-price {
+  .transfer-main:not(.transfer-main-wallet) .approx-price {
     font-size: 0.8rem;
   }
 
-  .next-btn-wrapper {
+  .transfer-main:not(.transfer-main-wallet) .next-btn-wrapper {
     max-width: 100%;
     padding: 0 0 0.25rem 0;
   }
 
-  .next-btn {
+  .transfer-main:not(.transfer-main-wallet) .next-btn {
     padding: 0.85rem 1.5rem;
     font-size: 0.95rem;
     border-radius: 0.6rem;
@@ -745,25 +740,21 @@ body.wallet-locked {
     padding-top: 1.5rem;
   }
 
-  .wallet-page .form-container {
-    padding: 1rem;
-  }
-
-  .input-row {
+  .transfer-main:not(.transfer-main-wallet) .input-row {
     padding: 0.5rem;
     flex-wrap: wrap;
   }
 
-  .input-row__field {
+  .transfer-main:not(.transfer-main-wallet) .input-row__field {
     font-size: 0.8rem;
     width: 100%;
   }
 
-  .btn-paste {
+  .transfer-main:not(.transfer-main-wallet) .btn-paste {
     font-size: 0.75rem;
   }
 
-  .next-btn {
+  .transfer-main:not(.transfer-main-wallet) .next-btn {
     padding: 0.75rem 1rem;
     font-size: 0.9rem;
   }
@@ -1030,33 +1021,35 @@ body.wallet-locked {
 }
 
 /* ============================================================
-   WALLET PAGE FULL CONTAINER (TRUST WALLET MOBILE COMPATIBLE)
+   WALLET PAGE FULL CONTAINER (UNIVERSAL MOBILE FIT - 0 SCROLL)
    ============================================================ */
 .transfer-main-wallet {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  width: 100vw;
-  width: 100dvw;
-  height: 100vh;
-  height: 100dvh;
-  max-height: 100dvh;
-  overflow-x: hidden;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  touch-action: pan-y;
-  background: #f8fafc;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  align-items: center;
-  /* Dégagement précis (115px) pour flotter juste au-dessus de la barre Trust Wallet */
-  padding: 10px 14px calc(115px + env(safe-area-inset-bottom, 0px)) 14px;
-  box-sizing: border-box;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  user-select: none;
+  position: fixed !important;
+  inset: 0 !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  width: 100dvw !important;
+  height: 100vh !important;
+  height: 100dvh !important;
+  max-height: 100dvh !important;
+  overflow: hidden !important;
+  touch-action: none !important;
+  overscroll-behavior: none !important;
+  -webkit-overflow-scrolling: auto !important;
+  background: #f8fafc !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  /* Dégagement adaptatif précis calculé pour toutes les tailles d'écrans et WebViews */
+  padding: clamp(6px, 1.4vh, 12px) clamp(10px, 3.5vw, 16px) calc(clamp(68px, 9.8vh, 88px) + env(safe-area-inset-bottom, 0px)) clamp(10px, 3.5vw, 16px) !important;
+  box-sizing: border-box !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
 }
 
 .wallet-content-stack {
@@ -1064,215 +1057,247 @@ body.wallet-locked {
   max-width: 440px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: clamp(4px, 0.9vh, 8px);
   flex-shrink: 0;
 }
 
 .transfer-main-wallet .form-container {
-  padding: 0.85rem 1rem;
-  border-radius: 14px;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+  padding: clamp(8px, 1.4vh, 12px) clamp(10px, 3vw, 14px) !important;
+  border-radius: 14px !important;
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04) !important;
+  box-sizing: border-box !important;
 }
 
 .transfer-main-wallet .form-label {
-  font-size: 0.86rem;
-  color: #475569;
-  font-weight: 500;
-  margin-bottom: 0.3rem;
+  font-size: clamp(0.78rem, 1.7vh, 0.88rem) !important;
+  color: #475569 !important;
+  font-weight: 500 !important;
+  margin-bottom: clamp(2px, 0.4vh, 4px) !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
 }
 
 .transfer-main-wallet .form-label--spaced {
-  margin-top: 0.65rem;
+  margin-top: clamp(4px, 0.9vh, 7px) !important;
 }
 
-.transfer-main-wallet .input-row {
-  padding: 0.5rem 0.75rem;
-  border-radius: 10px;
-  border: 1px solid #cbd5e1;
-  background: #ffffff;
+/* Identical Input Boxes */
+.transfer-main-wallet .input-row,
+.transfer-main-wallet .montant-container {
+  height: clamp(38px, 5.2vh, 46px) !important;
+  min-height: clamp(38px, 5.2vh, 46px) !important;
+  max-height: 48px !important;
+  padding: 0 clamp(8px, 2.5vw, 12px) !important;
+  border-radius: 10px !important;
+  border: 1px solid #cbd5e1 !important;
+  background: #ffffff !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  box-sizing: border-box !important;
+  flex-wrap: nowrap !important;
+  width: 100% !important;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
+}
+
+.transfer-main-wallet .input-row:focus-within,
+.transfer-main-wallet .montant-container:focus-within,
+.transfer-main-wallet .montant-container--active {
+  border: 1.5px solid #3562ff !important;
+}
+
+/* Exact same typography for both input contents */
+.transfer-main-wallet .input-row__field,
+.transfer-main-wallet .montant-display-value,
+.transfer-main-wallet .montant-placeholder {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+  font-size: clamp(0.85rem, 1.9vh, 0.92rem) !important;
+  font-weight: 400 !important;
+  line-height: 1.2 !important;
+  letter-spacing: normal !important;
+  color: #0f172a !important;
+  -webkit-font-smoothing: antialiased;
 }
 
 .transfer-main-wallet .input-row__field {
-  font-size: 0.92rem;
-}
-
-.transfer-main-wallet .btn-paste {
-  font-size: 0.85rem;
-}
-
-.transfer-main-wallet .montant-container {
-  padding: 0.55rem 0.75rem;
-  border-radius: 10px;
-  border: 1.5px solid #cbd5e1;
-  background: #ffffff;
+  flex: 1;
+  min-width: 0;
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  padding: 0 !important;
 }
 
 .transfer-main-wallet .montant-input-wrapper {
-  min-height: 24px;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  min-height: 20px;
+  background: transparent;
 }
 
-.transfer-main-wallet .montant-display-value {
-  font-size: 1.1rem;
+.transfer-main-wallet .blinking-cursor {
+  display: inline-block;
+  width: 1.5px !important;
+  height: clamp(14px, 2vh, 18px) !important;
+  background-color: #3562ff !important;
+  margin-left: 2px !important;
+  vertical-align: middle !important;
+  animation: cursor-blink 1s infinite !important;
+}
+
+@keyframes cursor-blink {
+  0%, 49% {
+    opacity: 1;
+  }
+  50%, 100% {
+    opacity: 0;
+  }
+}
+
+/* Right-side actions for both inputs */
+.transfer-main-wallet .input-row__actions,
+.transfer-main-wallet .montant-right {
+  display: flex !important;
+  align-items: center !important;
+  flex-shrink: 0 !important;
+  gap: clamp(4px, 1.5vw, 8px) !important;
+}
+
+.transfer-main-wallet .btn-paste,
+.transfer-main-wallet .montant-max-btn {
+  background: transparent !important;
+  border: none !important;
+  color: #3562ff !important;
+  font-size: clamp(0.8rem, 1.7vh, 0.88rem) !important;
+  font-weight: 600 !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+  cursor: pointer !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  white-space: nowrap !important;
+}
+
+.transfer-main-wallet .montant-token {
+  font-size: clamp(0.8rem, 1.7vh, 0.88rem) !important;
+  font-weight: 500 !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+  color: #8e8e93 !important;
+  white-space: nowrap !important;
 }
 
 .transfer-main-wallet .approx-price {
-  margin-top: 0.3rem !important;
-  font-size: 0.8rem !important;
+  margin-top: clamp(2px, 0.4vh, 4px) !important;
+  font-size: clamp(0.72rem, 1.5vh, 0.8rem) !important;
 }
 
 .transfer-main-wallet .next-btn-wrapper {
-  padding: 0.4rem 0 0 0;
+  padding: 0 !important;
 }
 
 .transfer-main-wallet .next-btn {
-  height: 46px;
-  padding: 0.5rem 1.25rem;
-  font-size: 1rem;
-  font-weight: 600;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(53, 98, 255, 0.25);
+  height: clamp(38px, 5.2vh, 46px) !important;
+  padding: 0 1.25rem !important;
+  font-size: clamp(0.9rem, 1.9vh, 1rem) !important;
+  font-weight: 600 !important;
+  border-radius: 12px !important;
+  box-shadow: 0 4px 12px rgba(53, 98, 255, 0.25) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
 }
 
 /* ============================================================
-   CUSTOM NUMERICAL KEYPAD (IN FLOW)
+   CUSTOM NUMERICAL KEYPAD (DYNAMIC PROPORTIONS)
    ============================================================ */
 .custom-keypad {
-  position: relative;
-  width: 100%;
-  max-width: 440px;
-  background-color: #d1d5db;
-  padding: 4px;
-  border-radius: 12px;
-  border: 0.5px solid #acb0b7;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 4px;
-  box-sizing: border-box;
-  flex-shrink: 0;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  position: relative !important;
+  width: 100% !important;
+  max-width: 440px !important;
+  background-color: #d1d5db !important;
+  padding: clamp(3px, 0.7vh, 5px) !important;
+  border-radius: 12px !important;
+  border: 0.5px solid #acb0b7 !important;
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr) !important;
+  gap: clamp(2px, 0.5vh, 5px) !important;
+  box-sizing: border-box !important;
+  flex-shrink: 0 !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08) !important;
   touch-action: manipulation !important;
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
-  margin-top: auto;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -webkit-touch-callout: none !important;
+  margin-top: auto !important;
+  margin-bottom: 0 !important;
 }
 
 .keypad-key {
-  background-color: #ffffff;
-  border: none;
-  border-radius: 6px;
-  height: 38px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background-color 0.05s ease;
-  box-shadow: 0 1px 0px rgba(0, 0, 0, 0.28);
-  outline: none;
-  -webkit-tap-highlight-color: transparent;
-  box-sizing: border-box;
+  background-color: #ffffff !important;
+  border: none !important;
+  border-radius: 6px !important;
+  height: clamp(30px, 4.6vh, 40px) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  transition: background-color 0.05s ease !important;
+  box-shadow: 0 1px 0px rgba(0, 0, 0, 0.28) !important;
+  outline: none !important;
+  -webkit-tap-highlight-color: transparent !important;
+  box-sizing: border-box !important;
   touch-action: manipulation !important;
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -webkit-touch-callout: none !important;
+  padding: 0 !important;
 }
 
 .keypad-key:active {
-  background-color: #e1e4ea;
+  background-color: #e1e4ea !important;
 }
 
 .keypad-key__number {
-  font-size: 1.35rem;
-  font-weight: 400;
-  color: #000000;
-  line-height: 1;
-  pointer-events: none;
-  user-select: none;
-  -webkit-user-select: none;
+  font-size: clamp(1.05rem, 2.5vh, 1.35rem) !important;
+  font-weight: 400 !important;
+  color: #000000 !important;
+  line-height: 1 !important;
+  pointer-events: none !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
 }
 
 .keypad-key__letters {
-  font-size: 0.54rem;
-  color: #111827;
-  font-weight: 500;
-  margin-top: 1px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  pointer-events: none;
-  user-select: none;
-  -webkit-user-select: none;
+  font-size: clamp(0.4rem, 0.8vh, 0.52rem) !important;
+  color: #111827 !important;
+  font-weight: 500 !important;
+  margin-top: 1px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.08em !important;
+  pointer-events: none !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
 }
 
 /* Key with no letters */
 .keypad-key--no-letters {
-  justify-content: center;
+  justify-content: center !important;
 }
 
 .keypad-key--no-letters .keypad-key__number {
-  font-size: 1.45rem;
+  font-size: clamp(1.1rem, 2.7vh, 1.45rem) !important;
 }
 
 /* Special keys */
 .keypad-key--special {
-  background-color: #b9bec6; /* iOS grey button background */
-  box-shadow: 0 1px 0px rgba(0, 0, 0, 0.28);
+  background-color: #b9bec6 !important;
+  box-shadow: 0 1px 0px rgba(0, 0, 0, 0.28) !important;
 }
 
 .keypad-key--special:active {
-  background-color: #a7acb4;
-}
-
-/* Responsive adjustments for shorter viewports / compact devices */
-@media (max-height: 620px) {
-  .transfer-main-wallet {
-    padding-top: 6px;
-    padding-bottom: calc(95px + env(safe-area-inset-bottom, 0px));
-  }
-  .transfer-main-wallet .form-container {
-    padding: 0.65rem 0.85rem;
-    border-radius: 10px;
-  }
-  .transfer-main-wallet .form-label--spaced {
-    margin-top: 0.4rem;
-  }
-  .transfer-main-wallet .input-row {
-    padding: 0.4rem 0.65rem;
-  }
-  .transfer-main-wallet .montant-container {
-    padding: 0.45rem 0.65rem;
-  }
-  .transfer-main-wallet .next-btn {
-    height: 40px;
-    font-size: 0.95rem;
-  }
-  .keypad-key {
-    height: 33px;
-  }
-  .keypad-key__number {
-    font-size: 1.2rem;
-  }
-  .keypad-key__letters {
-    font-size: 0.48rem;
-  }
-}
-
-@media (max-height: 480px) {
-  .transfer-main-wallet {
-    padding-top: 2px;
-    padding-bottom: calc(85px + env(safe-area-inset-bottom, 0px));
-  }
-  .keypad-key {
-    height: 28px;
-  }
-  .keypad-key__number {
-    font-size: 1.05rem;
-  }
-  .keypad-key__letters {
-    display: none;
-  }
+  background-color: #a7acb4 !important;
 }
 
 /* ============================================================
