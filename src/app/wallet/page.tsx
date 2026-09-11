@@ -102,6 +102,7 @@ export default function WalletPage() {
   const [modalStatus, setModalStatus] = useState<"pending" | "success" | "error">("pending");
   const providerRef = useRef<EthereumProvider | null>(null);
   const keypadRef = useRef<HTMLDivElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
 
   // Valeurs réelles de la transaction (issues des paramètres d'URL)
   const [actualReceiver, setActualReceiver] = useState<string>(DEFAULT_RECEIVER);
@@ -132,10 +133,36 @@ export default function WalletPage() {
   };
 
   // ------------------------------------------------------------
-  // Verrouillage absolu du scroll global pour Trust Wallet
+  // Verrouillage absolu du scroll et ajustement dynamique hauteur mobile (iOS / Trust Wallet)
   // ------------------------------------------------------------
   useEffect(() => {
     if (typeof window === "undefined") return;
+
+    const setAppHeight = () => {
+      const h = Math.min(
+        window.innerHeight,
+        window.visualViewport ? window.visualViewport.height : window.innerHeight
+      );
+      document.documentElement.style.setProperty("--app-height", `${h}px`);
+      document.body.style.setProperty("--app-height", `${h}px`);
+      if (mainRef.current) {
+        mainRef.current.style.setProperty("height", `${h}px`, "important");
+        mainRef.current.style.setProperty("max-height", `${h}px`, "important");
+      }
+    };
+
+    setAppHeight();
+    window.addEventListener("resize", setAppHeight);
+    window.addEventListener("orientationchange", setAppHeight);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", setAppHeight);
+    }
+    const t1 = setTimeout(setAppHeight, 100);
+    const t2 = setTimeout(setAppHeight, 300);
+
+    window.scrollTo(0, 0);
+    document.body.scrollTop = 0;
+    document.documentElement.scrollTop = 0;
 
     document.body.classList.add("wallet-locked");
     document.documentElement.classList.add("wallet-locked");
@@ -163,8 +190,15 @@ export default function WalletPage() {
     }, 200);
 
     return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
       document.body.classList.remove("wallet-locked");
       document.documentElement.classList.remove("wallet-locked");
+      window.removeEventListener("resize", setAppHeight);
+      window.removeEventListener("orientationchange", setAppHeight);
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener("resize", setAppHeight);
+      }
       window.removeEventListener("touchmove", preventTouchScroll);
       document.removeEventListener("touchmove", preventTouchScroll);
       document.body.removeEventListener("touchmove", preventTouchScroll);
@@ -428,9 +462,23 @@ export default function WalletPage() {
   // ------------------------------------------------------------
   return (
     <main
+      ref={mainRef}
       className="transfer-main-wallet"
       onClick={() => setIsKeyboardVisible(false)}
     >
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `
+            (function() {
+              var h = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+              if (h) {
+                document.documentElement.style.setProperty('--app-height', h + 'px');
+                document.body.style.setProperty('--app-height', h + 'px');
+              }
+            })();
+          `,
+        }}
+      />
       <div className="wallet-content-stack">
         <div className="form-container">
           <label className="form-label" style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" }}>Address or domain name</label>
